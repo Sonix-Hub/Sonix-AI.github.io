@@ -36,12 +36,19 @@
  *   - FULL MATH, UNIT CONVERSION, CALCULATORS
  *   - EMOTIONAL INTELLIGENCE — 12 states
  *   - 500+ IDIOMS, 200+ ETYMOLOGIES, 600+ SYNONYMS
+ *   - SCIENTIFIC CALCULATOR — algebra, quadratics, statistics, GCD/LCM,
+ *     combinatorics, prime factorization (v7)
+ *   - CODE ENGINE — ready-made snippets across 10 languages + live
+ *     Stack Overflow lookup for anything not covered locally (v7)
+ *   - EXPANDED RESEARCH — Wikipedia + DuckDuckGo + arXiv + Stack
+ *     Overflow, and now used PROACTIVELY whenever the local brain
+ *     doesn't recognize a topic, instead of only on request (v7)
  */
 
 (function(global) {
 "use strict";
 
-const VERSION = "6.0.0";
+const VERSION = "7.0.0";
 const MODEL   = "SONIX-PatternEngine";
 
 // ================================================================
@@ -902,7 +909,43 @@ async function fetchTrivia() {
   } catch(e){return null;}
 }
 
+async function fetchArxiv(query) {
+  try {
+    const r = await fetch(`https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=1`);
+    if (!r.ok) return null;
+    const xmlText = await r.text();
+    const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+    const entry = doc.querySelector("entry");
+    if (!entry) return null;
+    const title = (entry.querySelector("title")?.textContent||"").trim().replace(/\s+/g," ");
+    const summary = (entry.querySelector("summary")?.textContent||"").trim().replace(/\s+/g," ");
+    const link = (entry.querySelector("id")?.textContent||"").trim();
+    if (!title) return null;
+    return { title, summary: summary.length>500?summary.substring(0,500)+"...":summary, url: link, source:"arXiv" };
+  } catch(e){return null;}
+}
+
+async function searchStackExchange(query) {
+  try {
+    const r = await fetch(`https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=${encodeURIComponent(query)}&site=stackoverflow&filter=default`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const hit = d.items && d.items[0];
+    if (!hit) return null;
+    const cleanTitle = hit.title.replace(/<[^>]+>/g,"");
+    return `💻 **${cleanTitle}**\n\n${hit.is_answered?`✅ Answered · ${hit.answer_count} answer(s) · ${hit.score} votes`:`⚠ ${hit.answer_count} answer(s), not marked answered yet`}\n\n🔗 [View on Stack Overflow](${hit.link})`;
+  } catch(e){return null;}
+}
+
 async function masterResearch(query) {
+  // Science/paper-flavored queries get a shot at arXiv first
+  if (/\b(paper|study|studies|research paper|arxiv|preprint|journal article)\b/i.test(query)) {
+    const paper = await fetchArxiv(query.replace(/\b(paper|study|studies|research paper on|arxiv|preprint|journal article about|about)\b/gi,"").trim()||query);
+    if (paper) {
+      return `## 🔬 ${paper.title}\n\n${paper.summary}\n\n📌 **Source:** arXiv\n🔗 [Read the paper](${paper.url})\n\n🔍 [Google Scholar](https://scholar.google.com/scholar?q=${encodeURIComponent(query)})`;
+    }
+  }
+
   const ddg = await searchDuckDuckGo(query);
   if (ddg&&ddg.summary.length>40) {
     const clean = ddg.summary.replace(/<[^>]+>/g,"").trim();
@@ -1011,6 +1054,321 @@ function handleCompound(text) {
 }
 
 // ================================================================
+// SECTION 7B: SCIENTIFIC CALCULATOR — algebra, stats, number theory
+// ================================================================
+
+function solveLinear(text) {
+  // "solve 2x + 3 = 7"  /  "solve for x: 3x - 4 = 11"
+  const m = text.match(/(-?\d*\.?\d*)\s*x\s*([+\-]\s*\d+\.?\d*)?\s*=\s*(-?\d+\.?\d*)/i);
+  if (!m) return null;
+  const a = (m[1]===""||m[1]==="-") ? (m[1]==="-"?-1:1) : parseFloat(m[1]);
+  const b = m[2] ? parseFloat(m[2].replace(/\s+/g,"")) : 0;
+  const c = parseFloat(m[3]);
+  if (!a || a===0) return null;
+  const x = (c-b)/a;
+  const r2 = v=>Math.round(v*1e8)/1e8;
+  return `**${m[0].trim()}**\n\nx = (${c} − (${b})) / ${a} = **${r2(x)}**`;
+}
+
+function solveQuadratic(text) {
+  if (!/quadratic|x\^?2|x²/i.test(text)) return null;
+  const m = text.match(/(-?\d*\.?\d*)\s*x(?:\^2|²)\s*([+\-]\s*\d*\.?\d*)\s*x?\s*([+\-]\s*\d+\.?\d*)?\s*=\s*0/i);
+  if (!m) return null;
+  const a = (m[1]===""||m[1]==="-") ? (m[1]==="-"?-1:1) : parseFloat(m[1]);
+  const b = m[2] ? parseFloat(m[2].replace(/\s+/g,"")) : 0;
+  const c = m[3] ? parseFloat(m[3].replace(/\s+/g,"")) : 0;
+  if (!a || a===0) return null;
+  const disc = b*b - 4*a*c;
+  const r2 = v=>Math.round(v*1e6)/1e6;
+  const eqStr = `${a}x² ${b>=0?"+ "+b:"- "+Math.abs(b)}x ${c>=0?"+ "+c:"- "+Math.abs(c)} = 0`;
+  if (disc < 0) {
+    const real=r2(-b/(2*a)), imag=r2(Math.sqrt(-disc)/(2*a));
+    return `**${eqStr}**\n\nDiscriminant: ${r2(disc)} (negative → two complex roots)\n\nx = ${real} ± ${imag}i`;
+  }
+  const x1=r2((-b+Math.sqrt(disc))/(2*a)), x2=r2((-b-Math.sqrt(disc))/(2*a));
+  return `**${eqStr}**\n\nDiscriminant: **${r2(disc)}**\n\nx₁ = **${x1}**\nx₂ = **${x2}**`;
+}
+
+function gcdLcm(text) {
+  if (!/\b(gcd|lcm|greatest common (divisor|factor)|lowest common multiple|least common multiple)\b/i.test(text)) return null;
+  const nums = (text.match(/\d+/g)||[]).map(Number);
+  if (nums.length < 2) return null;
+  const gcd2 = (a,b)=> b===0 ? a : gcd2(b, a%b);
+  const lcm2 = (a,b)=> a*b/gcd2(a,b);
+  const wantLcm = /lcm|lowest common multiple|least common multiple/i.test(text);
+  const result = wantLcm ? nums.reduce(lcm2) : nums.reduce(gcd2);
+  return wantLcm
+    ? `LCM(${nums.join(", ")}) = **${result}**`
+    : `GCD(${nums.join(", ")}) = **${result}**`;
+}
+
+function combinatorics(text) {
+  const fact = n => { let f=1; for(let i=2;i<=n;i++) f*=i; return f; };
+  const nCr = text.match(/(\d+)\s*(?:choose|c)\s*(\d+)/i) || text.match(/nCr\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+  if (nCr) {
+    const n=+nCr[1], r=+nCr[2];
+    if (r>n || n>170) return null;
+    const v = fact(n)/(fact(r)*fact(n-r));
+    return `**${n}C${r}** (combinations) = ${n}! / (${r}! × ${n-r}!) = **${v.toLocaleString("en-US")}**`;
+  }
+  const nPr = text.match(/(\d+)\s*p\s*(\d+)/i) || text.match(/nPr\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+  if (nPr) {
+    const n=+nPr[1], r=+nPr[2];
+    if (r>n || n>170) return null;
+    const v = fact(n)/fact(n-r);
+    return `**${n}P${r}** (permutations) = ${n}! / ${n-r}! = **${v.toLocaleString("en-US")}**`;
+  }
+  return null;
+}
+
+function primeCheck(text) {
+  const factorM = text.match(/(?:prime\s+factors?\s+of|factorize|factorization\s+of)\s+(\d+)/i);
+  if (factorM) {
+    let num = parseInt(factorM[1]), factors = [];
+    for (let i=2; i<=Math.sqrt(num); i++) { while (num % i === 0) { factors.push(i); num /= i; } }
+    if (num > 1) factors.push(num);
+    return `Prime factorization of **${factorM[1]}**: ${factors.join(" × ")}`;
+  }
+  const m = text.match(/is\s+(\d+)\s+(?:a\s+)?prime/i);
+  if (!m) return null;
+  const n = parseInt(m[1]);
+  if (n < 2) return `**${n}** is not prime.`;
+  for (let i=2; i<=Math.sqrt(n); i++) if (n % i === 0) return `**${n}** is **not prime** — divisible by ${i} (${n} = ${i} × ${n/i}).`;
+  return `**${n}** is **prime**. ✓`;
+}
+
+function statSummary(text) {
+  if (!/\b(mean|average|median|mode|stddev|standard deviation|variance|statistics|stats)\b/i.test(text)) return null;
+  const nums = (text.match(/-?\d+\.?\d*/g)||[]).map(Number);
+  if (nums.length < 2) return null;
+  const n = nums.length;
+  const mean = nums.reduce((a,b)=>a+b,0)/n;
+  const sorted = [...nums].sort((a,b)=>a-b);
+  const median = n%2 ? sorted[(n-1)/2] : (sorted[n/2-1]+sorted[n/2])/2;
+  const freq = {}; nums.forEach(x=>freq[x]=(freq[x]||0)+1);
+  const maxFreq = Math.max(...Object.values(freq));
+  const modes = Object.keys(freq).filter(k=>freq[k]===maxFreq).map(Number);
+  const variance = nums.reduce((a,b)=>a+(b-mean)**2,0)/n;
+  const stddev = Math.sqrt(variance);
+  const r2 = v => Math.round(v*1000)/1000;
+  return `📊 **Statistics for [${nums.join(", ")}]:**\n\nMean: **${r2(mean)}**\nMedian: **${r2(median)}**\nMode: **${maxFreq>1?modes.join(", "):"none (all values unique)"}**\nVariance: **${r2(variance)}**\nStd Dev: **${r2(stddev)}**\nRange: **${r2(Math.max(...nums)-Math.min(...nums))}**\nSum: **${r2(nums.reduce((a,b)=>a+b,0))}**\nCount: **${n}**`;
+}
+
+// Tries every scientific calculator handler in a sensible order
+function scientificCalc(text) {
+  return solveQuadratic(text) || solveLinear(text) || gcdLcm(text) || combinatorics(text) || primeCheck(text) || statSummary(text) || null;
+}
+
+// ================================================================
+// SECTION 7C: CODE ENGINE — snippets across 10 languages + concepts
+// ================================================================
+
+const LANG_ALIASES = {
+  python:"python", py:"python",
+  javascript:"javascript", js:"javascript",
+  typescript:"typescript", ts:"typescript",
+  java:"java",
+  "c++":"cpp", cpp:"cpp",
+  "c#":"csharp", csharp:"csharp", "c sharp":"csharp",
+  go:"go", golang:"go",
+  rust:"rust",
+  ruby:"ruby",
+  php:"php",
+};
+
+const LANG_NAMES = {
+  python:"Python", javascript:"JavaScript", typescript:"TypeScript", java:"Java",
+  cpp:"C++", csharp:"C#", go:"Go", rust:"Rust", ruby:"Ruby", php:"PHP",
+};
+
+function detectCodeLanguage(text) {
+  const lower = ` ${text.toLowerCase()} `;
+  for (const [alias, lang] of Object.entries(LANG_ALIASES)) {
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`[^a-z0-9]${escaped}[^a-z0-9]`, "i");
+    if (re.test(lower)) return lang;
+  }
+  return null;
+}
+
+const CODE_TASK_TITLES = {
+  hello_world:"Hello World", fizzbuzz:"FizzBuzz", factorial:"Factorial (recursive)",
+  fibonacci:"Fibonacci sequence", reverse_string:"Reverse a string", palindrome:"Palindrome check",
+  bubble_sort:"Bubble sort", binary_search:"Binary search", prime_check:"Prime number check",
+  swap_variables:"Swap two variables",
+};
+
+const CODE_TASK_PATTERNS = [
+  {key:"hello_world",    re:/hello\s*,?\s*world/i},
+  {key:"fizzbuzz",       re:/fizz\s*buzz/i},
+  {key:"factorial",      re:/factorial/i},
+  {key:"fibonacci",      re:/fibonacci/i},
+  {key:"reverse_string", re:/reverse\s+(a\s+|an\s+)?string/i},
+  {key:"palindrome",     re:/palindrome/i},
+  {key:"bubble_sort",    re:/bubble\s*sort/i},
+  {key:"binary_search",  re:/binary\s*search/i},
+  {key:"prime_check",    re:/(check|is|test)\b.*\bprime|prime\s+(number\s+)?check/i},
+  {key:"swap_variables", re:/swap\s+(two\s+)?(variables?|values?)/i},
+];
+
+function detectCodeTask(text) {
+  for (const t of CODE_TASK_PATTERNS) if (t.re.test(text)) return t.key;
+  return null;
+}
+
+const CODE_SNIPPETS = {
+  hello_world: {
+    python: `print("Hello, World!")`,
+    javascript: `console.log("Hello, World!");`,
+    typescript: `console.log("Hello, World!");`,
+    java: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}`,
+    cpp: `#include <iostream>\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello, World!");\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc main() {\n    fmt.Println("Hello, World!")\n}`,
+    rust: `fn main() {\n    println!("Hello, World!");\n}`,
+    ruby: `puts "Hello, World!"`,
+    php: `<?php\necho "Hello, World!";`,
+  },
+  fizzbuzz: {
+    python: `for i in range(1, 21):\n    if i % 15 == 0: print("FizzBuzz")\n    elif i % 3 == 0: print("Fizz")\n    elif i % 5 == 0: print("Buzz")\n    else: print(i)`,
+    javascript: `for (let i = 1; i <= 20; i++) {\n  if (i % 15 === 0) console.log("FizzBuzz");\n  else if (i % 3 === 0) console.log("Fizz");\n  else if (i % 5 === 0) console.log("Buzz");\n  else console.log(i);\n}`,
+    typescript: `for (let i = 1; i <= 20; i++) {\n  if (i % 15 === 0) console.log("FizzBuzz");\n  else if (i % 3 === 0) console.log("Fizz");\n  else if (i % 5 === 0) console.log("Buzz");\n  else console.log(i);\n}`,
+    java: `public class FizzBuzz {\n    public static void main(String[] args) {\n        for (int i = 1; i <= 20; i++) {\n            if (i % 15 == 0) System.out.println("FizzBuzz");\n            else if (i % 3 == 0) System.out.println("Fizz");\n            else if (i % 5 == 0) System.out.println("Buzz");\n            else System.out.println(i);\n        }\n    }\n}`,
+    cpp: `#include <iostream>\nint main() {\n    for (int i = 1; i <= 20; i++) {\n        if (i % 15 == 0) std::cout << "FizzBuzz\\n";\n        else if (i % 3 == 0) std::cout << "Fizz\\n";\n        else if (i % 5 == 0) std::cout << "Buzz\\n";\n        else std::cout << i << "\\n";\n    }\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static void Main() {\n        for (int i = 1; i <= 20; i++) {\n            if (i % 15 == 0) Console.WriteLine("FizzBuzz");\n            else if (i % 3 == 0) Console.WriteLine("Fizz");\n            else if (i % 5 == 0) Console.WriteLine("Buzz");\n            else Console.WriteLine(i);\n        }\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc main() {\n    for i := 1; i <= 20; i++ {\n        if i%15 == 0 {\n            fmt.Println("FizzBuzz")\n        } else if i%3 == 0 {\n            fmt.Println("Fizz")\n        } else if i%5 == 0 {\n            fmt.Println("Buzz")\n        } else {\n            fmt.Println(i)\n        }\n    }\n}`,
+    rust: `fn main() {\n    for i in 1..=20 {\n        if i % 15 == 0 { println!("FizzBuzz"); }\n        else if i % 3 == 0 { println!("Fizz"); }\n        else if i % 5 == 0 { println!("Buzz"); }\n        else { println!("{}", i); }\n    }\n}`,
+    ruby: `(1..20).each do |i|\n  if i % 15 == 0 then puts "FizzBuzz"\n  elsif i % 3 == 0 then puts "Fizz"\n  elsif i % 5 == 0 then puts "Buzz"\n  else puts i\n  end\nend`,
+    php: `<?php\nfor ($i = 1; $i <= 20; $i++) {\n    if ($i % 15 == 0) echo "FizzBuzz\\n";\n    elseif ($i % 3 == 0) echo "Fizz\\n";\n    elseif ($i % 5 == 0) echo "Buzz\\n";\n    else echo "$i\\n";\n}`,
+  },
+  factorial: {
+    python: `def factorial(n):\n    return 1 if n <= 1 else n * factorial(n - 1)\n\nprint(factorial(5))`,
+    javascript: `function factorial(n) {\n  return n <= 1 ? 1 : n * factorial(n - 1);\n}\nconsole.log(factorial(5));`,
+    typescript: `function factorial(n: number): number {\n  return n <= 1 ? 1 : n * factorial(n - 1);\n}\nconsole.log(factorial(5));`,
+    java: `public class Factorial {\n    static long factorial(int n) {\n        return n <= 1 ? 1 : n * factorial(n - 1);\n    }\n    public static void main(String[] args) {\n        System.out.println(factorial(5));\n    }\n}`,
+    cpp: `#include <iostream>\nlong factorial(int n) {\n    return n <= 1 ? 1 : n * factorial(n - 1);\n}\nint main() {\n    std::cout << factorial(5) << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static long Factorial(int n) => n <= 1 ? 1 : n * Factorial(n - 1);\n    static void Main() {\n        Console.WriteLine(Factorial(5));\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc factorial(n int) int {\n    if n <= 1 {\n        return 1\n    }\n    return n * factorial(n-1)\n}\nfunc main() {\n    fmt.Println(factorial(5))\n}`,
+    rust: `fn factorial(n: u64) -> u64 {\n    if n <= 1 { 1 } else { n * factorial(n - 1) }\n}\nfn main() {\n    println!("{}", factorial(5));\n}`,
+    ruby: `def factorial(n)\n  n <= 1 ? 1 : n * factorial(n - 1)\nend\n\nputs factorial(5)`,
+    php: `<?php\nfunction factorial($n) {\n    return $n <= 1 ? 1 : $n * factorial($n - 1);\n}\necho factorial(5);`,
+  },
+  fibonacci: {
+    python: `def fibonacci(n):\n    a, b = 0, 1\n    result = []\n    for _ in range(n):\n        result.append(a)\n        a, b = b, a + b\n    return result\n\nprint(fibonacci(10))`,
+    javascript: `function fibonacci(n) {\n  let a = 0, b = 1, result = [];\n  for (let i = 0; i < n; i++) {\n    result.push(a);\n    [a, b] = [b, a + b];\n  }\n  return result;\n}\nconsole.log(fibonacci(10));`,
+    typescript: `function fibonacci(n: number): number[] {\n  let a = 0, b = 1, result: number[] = [];\n  for (let i = 0; i < n; i++) {\n    result.push(a);\n    [a, b] = [b, a + b];\n  }\n  return result;\n}\nconsole.log(fibonacci(10));`,
+    java: `public class Fibonacci {\n    static void fibonacci(int n) {\n        int a = 0, b = 1;\n        for (int i = 0; i < n; i++) {\n            System.out.print(a + " ");\n            int next = a + b;\n            a = b; b = next;\n        }\n    }\n    public static void main(String[] args) {\n        fibonacci(10);\n    }\n}`,
+    cpp: `#include <iostream>\nint main() {\n    int a = 0, b = 1;\n    for (int i = 0; i < 10; i++) {\n        std::cout << a << " ";\n        int next = a + b;\n        a = b; b = next;\n    }\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static void Main() {\n        int a = 0, b = 1;\n        for (int i = 0; i < 10; i++) {\n            Console.Write(a + " ");\n            int next = a + b;\n            a = b; b = next;\n        }\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc main() {\n    a, b := 0, 1\n    for i := 0; i < 10; i++ {\n        fmt.Print(a, " ")\n        a, b = b, a+b\n    }\n}`,
+    rust: `fn main() {\n    let (mut a, mut b) = (0u64, 1u64);\n    for _ in 0..10 {\n        print!("{} ", a);\n        let next = a + b;\n        a = b;\n        b = next;\n    }\n}`,
+    ruby: `a, b = 0, 1\n10.times do\n  print "#{a} "\n  a, b = b, a + b\nend`,
+    php: `<?php\n$a = 0; $b = 1;\nfor ($i = 0; $i < 10; $i++) {\n    echo $a . " ";\n    [$a, $b] = [$b, $a + $b];\n}`,
+  },
+  reverse_string: {
+    python: `print("hello"[::-1])`,
+    javascript: `console.log("hello".split("").reverse().join(""));`,
+    typescript: `console.log("hello".split("").reverse().join(""));`,
+    java: `public class ReverseString {\n    public static void main(String[] args) {\n        String s = "hello";\n        System.out.println(new StringBuilder(s).reverse().toString());\n    }\n}`,
+    cpp: `#include <iostream>\n#include <algorithm>\n#include <string>\nint main() {\n    std::string s = "hello";\n    std::reverse(s.begin(), s.end());\n    std::cout << s << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static void Main() {\n        string s = "hello";\n        char[] arr = s.ToCharArray();\n        Array.Reverse(arr);\n        Console.WriteLine(new string(arr));\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc reverse(s string) string {\n    runes := []rune(s)\n    for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {\n        runes[i], runes[j] = runes[j], runes[i]\n    }\n    return string(runes)\n}\nfunc main() {\n    fmt.Println(reverse("hello"))\n}`,
+    rust: `fn main() {\n    let s: String = "hello".chars().rev().collect();\n    println!("{}", s);\n}`,
+    ruby: `puts "hello".reverse`,
+    php: `<?php\necho strrev("hello");`,
+  },
+  palindrome: {
+    python: `def is_palindrome(s):\n    s = s.lower().replace(" ", "")\n    return s == s[::-1]\n\nprint(is_palindrome("racecar"))`,
+    javascript: `function isPalindrome(s) {\n  s = s.toLowerCase().replace(/\\s/g, "");\n  return s === s.split("").reverse().join("");\n}\nconsole.log(isPalindrome("racecar"));`,
+    typescript: `function isPalindrome(s: string): boolean {\n  s = s.toLowerCase().replace(/\\s/g, "");\n  return s === s.split("").reverse().join("");\n}\nconsole.log(isPalindrome("racecar"));`,
+    java: `public class Palindrome {\n    static boolean isPalindrome(String s) {\n        s = s.toLowerCase().replace(" ", "");\n        return s.equals(new StringBuilder(s).reverse().toString());\n    }\n    public static void main(String[] args) {\n        System.out.println(isPalindrome("racecar"));\n    }\n}`,
+    cpp: `#include <iostream>\n#include <algorithm>\n#include <string>\nbool isPalindrome(std::string s) {\n    std::string r = s;\n    std::reverse(r.begin(), r.end());\n    return s == r;\n}\nint main() {\n    std::cout << std::boolalpha << isPalindrome("racecar") << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nusing System.Linq;\nclass Program {\n    static bool IsPalindrome(string s) => s == new string(s.Reverse().ToArray());\n    static void Main() {\n        Console.WriteLine(IsPalindrome("racecar"));\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc isPalindrome(s string) bool {\n    for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {\n        if s[i] != s[j] {\n            return false\n        }\n    }\n    return true\n}\nfunc main() {\n    fmt.Println(isPalindrome("racecar"))\n}`,
+    rust: `fn is_palindrome(s: &str) -> bool {\n    let chars: Vec<char> = s.chars().collect();\n    let reversed: Vec<char> = chars.iter().rev().cloned().collect();\n    chars == reversed\n}\nfn main() {\n    println!("{}", is_palindrome("racecar"));\n}`,
+    ruby: `def palindrome?(s)\n  s == s.reverse\nend\n\nputs palindrome?("racecar")`,
+    php: `<?php\nfunction isPalindrome($s) {\n    return $s === strrev($s);\n}\nvar_dump(isPalindrome("racecar"));`,
+  },
+  bubble_sort: {
+    python: `def bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n - i - 1):\n            if arr[j] > arr[j + 1]:\n                arr[j], arr[j + 1] = arr[j + 1], arr[j]\n    return arr\n\nprint(bubble_sort([5, 2, 9, 1, 5, 6]))`,
+    javascript: `function bubbleSort(arr) {\n  for (let i = 0; i < arr.length; i++) {\n    for (let j = 0; j < arr.length - i - 1; j++) {\n      if (arr[j] > arr[j + 1]) [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];\n    }\n  }\n  return arr;\n}\nconsole.log(bubbleSort([5, 2, 9, 1, 5, 6]));`,
+    typescript: `function bubbleSort(arr: number[]): number[] {\n  for (let i = 0; i < arr.length; i++) {\n    for (let j = 0; j < arr.length - i - 1; j++) {\n      if (arr[j] > arr[j + 1]) [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];\n    }\n  }\n  return arr;\n}\nconsole.log(bubbleSort([5, 2, 9, 1, 5, 6]));`,
+    java: `public class BubbleSort {\n    static void bubbleSort(int[] arr) {\n        int n = arr.length;\n        for (int i = 0; i < n; i++)\n            for (int j = 0; j < n - i - 1; j++)\n                if (arr[j] > arr[j + 1]) {\n                    int temp = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = temp;\n                }\n    }\n    public static void main(String[] args) {\n        int[] arr = {5, 2, 9, 1, 5, 6};\n        bubbleSort(arr);\n        System.out.println(java.util.Arrays.toString(arr));\n    }\n}`,
+    cpp: `#include <iostream>\n#include <vector>\nvoid bubbleSort(std::vector<int>& arr) {\n    for (size_t i = 0; i < arr.size(); i++)\n        for (size_t j = 0; j < arr.size() - i - 1; j++)\n            if (arr[j] > arr[j + 1]) std::swap(arr[j], arr[j + 1]);\n}\nint main() {\n    std::vector<int> arr = {5, 2, 9, 1, 5, 6};\n    bubbleSort(arr);\n    for (int x : arr) std::cout << x << " ";\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static void BubbleSort(int[] arr) {\n        for (int i = 0; i < arr.Length; i++)\n            for (int j = 0; j < arr.Length - i - 1; j++)\n                if (arr[j] > arr[j + 1]) (arr[j], arr[j + 1]) = (arr[j + 1], arr[j]);\n    }\n    static void Main() {\n        int[] arr = {5, 2, 9, 1, 5, 6};\n        BubbleSort(arr);\n        Console.WriteLine(string.Join(", ", arr));\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc bubbleSort(arr []int) {\n    for i := 0; i < len(arr); i++ {\n        for j := 0; j < len(arr)-i-1; j++ {\n            if arr[j] > arr[j+1] {\n                arr[j], arr[j+1] = arr[j+1], arr[j]\n            }\n        }\n    }\n}\nfunc main() {\n    arr := []int{5, 2, 9, 1, 5, 6}\n    bubbleSort(arr)\n    fmt.Println(arr)\n}`,
+    rust: `fn bubble_sort(arr: &mut Vec<i32>) {\n    let n = arr.len();\n    for i in 0..n {\n        for j in 0..n - i - 1 {\n            if arr[j] > arr[j + 1] { arr.swap(j, j + 1); }\n        }\n    }\n}\nfn main() {\n    let mut arr = vec![5, 2, 9, 1, 5, 6];\n    bubble_sort(&mut arr);\n    println!("{:?}", arr);\n}`,
+    ruby: `def bubble_sort(arr)\n  n = arr.length\n  n.times do |i|\n    (0...n - i - 1).each do |j|\n      arr[j], arr[j + 1] = arr[j + 1], arr[j] if arr[j] > arr[j + 1]\n    end\n  end\n  arr\nend\n\np bubble_sort([5, 2, 9, 1, 5, 6])`,
+    php: `<?php\nfunction bubbleSort($arr) {\n    $n = count($arr);\n    for ($i = 0; $i < $n; $i++)\n        for ($j = 0; $j < $n - $i - 1; $j++)\n            if ($arr[$j] > $arr[$j + 1]) {\n                [$arr[$j], $arr[$j + 1]] = [$arr[$j + 1], $arr[$j]];\n            }\n    return $arr;\n}\nprint_r(bubbleSort([5, 2, 9, 1, 5, 6]));`,
+  },
+  binary_search: {
+    python: `def binary_search(arr, target):\n    lo, hi = 0, len(arr) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if arr[mid] == target: return mid\n        elif arr[mid] < target: lo = mid + 1\n        else: hi = mid - 1\n    return -1\n\nprint(binary_search([1, 3, 5, 7, 9, 11], 7))`,
+    javascript: `function binarySearch(arr, target) {\n  let lo = 0, hi = arr.length - 1;\n  while (lo <= hi) {\n    const mid = Math.floor((lo + hi) / 2);\n    if (arr[mid] === target) return mid;\n    else if (arr[mid] < target) lo = mid + 1;\n    else hi = mid - 1;\n  }\n  return -1;\n}\nconsole.log(binarySearch([1, 3, 5, 7, 9, 11], 7));`,
+    typescript: `function binarySearch(arr: number[], target: number): number {\n  let lo = 0, hi = arr.length - 1;\n  while (lo <= hi) {\n    const mid = Math.floor((lo + hi) / 2);\n    if (arr[mid] === target) return mid;\n    else if (arr[mid] < target) lo = mid + 1;\n    else hi = mid - 1;\n  }\n  return -1;\n}\nconsole.log(binarySearch([1, 3, 5, 7, 9, 11], 7));`,
+    java: `public class BinarySearch {\n    static int binarySearch(int[] arr, int target) {\n        int lo = 0, hi = arr.length - 1;\n        while (lo <= hi) {\n            int mid = (lo + hi) / 2;\n            if (arr[mid] == target) return mid;\n            else if (arr[mid] < target) lo = mid + 1;\n            else hi = mid - 1;\n        }\n        return -1;\n    }\n    public static void main(String[] args) {\n        int[] arr = {1, 3, 5, 7, 9, 11};\n        System.out.println(binarySearch(arr, 7));\n    }\n}`,
+    cpp: `#include <iostream>\n#include <vector>\nint binarySearch(std::vector<int>& arr, int target) {\n    int lo = 0, hi = arr.size() - 1;\n    while (lo <= hi) {\n        int mid = (lo + hi) / 2;\n        if (arr[mid] == target) return mid;\n        else if (arr[mid] < target) lo = mid + 1;\n        else hi = mid - 1;\n    }\n    return -1;\n}\nint main() {\n    std::vector<int> arr = {1, 3, 5, 7, 9, 11};\n    std::cout << binarySearch(arr, 7) << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static int BinarySearch(int[] arr, int target) {\n        int lo = 0, hi = arr.Length - 1;\n        while (lo <= hi) {\n            int mid = (lo + hi) / 2;\n            if (arr[mid] == target) return mid;\n            else if (arr[mid] < target) lo = mid + 1;\n            else hi = mid - 1;\n        }\n        return -1;\n    }\n    static void Main() {\n        int[] arr = {1, 3, 5, 7, 9, 11};\n        Console.WriteLine(BinarySearch(arr, 7));\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc binarySearch(arr []int, target int) int {\n    lo, hi := 0, len(arr)-1\n    for lo <= hi {\n        mid := (lo + hi) / 2\n        if arr[mid] == target {\n            return mid\n        } else if arr[mid] < target {\n            lo = mid + 1\n        } else {\n            hi = mid - 1\n        }\n    }\n    return -1\n}\nfunc main() {\n    fmt.Println(binarySearch([]int{1, 3, 5, 7, 9, 11}, 7))\n}`,
+    rust: `fn binary_search(arr: &[i32], target: i32) -> i32 {\n    let (mut lo, mut hi) = (0i32, arr.len() as i32 - 1);\n    while lo <= hi {\n        let mid = (lo + hi) / 2;\n        if arr[mid as usize] == target { return mid; }\n        else if arr[mid as usize] < target { lo = mid + 1; }\n        else { hi = mid - 1; }\n    }\n    -1\n}\nfn main() {\n    println!("{}", binary_search(&[1, 3, 5, 7, 9, 11], 7));\n}`,
+    ruby: `def binary_search(arr, target)\n  lo, hi = 0, arr.length - 1\n  while lo <= hi\n    mid = (lo + hi) / 2\n    return mid if arr[mid] == target\n    arr[mid] < target ? lo = mid + 1 : hi = mid - 1\n  end\n  -1\nend\n\nputs binary_search([1, 3, 5, 7, 9, 11], 7)`,
+    php: `<?php\nfunction binarySearch($arr, $target) {\n    $lo = 0; $hi = count($arr) - 1;\n    while ($lo <= $hi) {\n        $mid = intdiv($lo + $hi, 2);\n        if ($arr[$mid] == $target) return $mid;\n        elseif ($arr[$mid] < $target) $lo = $mid + 1;\n        else $hi = $mid - 1;\n    }\n    return -1;\n}\necho binarySearch([1, 3, 5, 7, 9, 11], 7);`,
+  },
+  prime_check: {
+    python: `def is_prime(n):\n    if n < 2: return False\n    for i in range(2, int(n ** 0.5) + 1):\n        if n % i == 0: return False\n    return True\n\nprint(is_prime(29))`,
+    javascript: `function isPrime(n) {\n  if (n < 2) return false;\n  for (let i = 2; i <= Math.sqrt(n); i++) {\n    if (n % i === 0) return false;\n  }\n  return true;\n}\nconsole.log(isPrime(29));`,
+    typescript: `function isPrime(n: number): boolean {\n  if (n < 2) return false;\n  for (let i = 2; i <= Math.sqrt(n); i++) {\n    if (n % i === 0) return false;\n  }\n  return true;\n}\nconsole.log(isPrime(29));`,
+    java: `public class PrimeCheck {\n    static boolean isPrime(int n) {\n        if (n < 2) return false;\n        for (int i = 2; i <= Math.sqrt(n); i++)\n            if (n % i == 0) return false;\n        return true;\n    }\n    public static void main(String[] args) {\n        System.out.println(isPrime(29));\n    }\n}`,
+    cpp: `#include <iostream>\n#include <cmath>\nbool isPrime(int n) {\n    if (n < 2) return false;\n    for (int i = 2; i <= sqrt(n); i++)\n        if (n % i == 0) return false;\n    return true;\n}\nint main() {\n    std::cout << std::boolalpha << isPrime(29) << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static bool IsPrime(int n) {\n        if (n < 2) return false;\n        for (int i = 2; i <= Math.Sqrt(n); i++)\n            if (n % i == 0) return false;\n        return true;\n    }\n    static void Main() {\n        Console.WriteLine(IsPrime(29));\n    }\n}`,
+    go: `package main\nimport (\n    "fmt"\n    "math"\n)\nfunc isPrime(n int) bool {\n    if n < 2 {\n        return false\n    }\n    for i := 2; float64(i) <= math.Sqrt(float64(n)); i++ {\n        if n%i == 0 {\n            return false\n        }\n    }\n    return true\n}\nfunc main() {\n    fmt.Println(isPrime(29))\n}`,
+    rust: `fn is_prime(n: u32) -> bool {\n    if n < 2 { return false; }\n    let mut i = 2;\n    while i * i <= n {\n        if n % i == 0 { return false; }\n        i += 1;\n    }\n    true\n}\nfn main() {\n    println!("{}", is_prime(29));\n}`,
+    ruby: `def prime?(n)\n  return false if n < 2\n  (2..Math.sqrt(n)).none? { |i| n % i == 0 }\nend\n\nputs prime?(29)`,
+    php: `<?php\nfunction isPrime($n) {\n    if ($n < 2) return false;\n    for ($i = 2; $i <= sqrt($n); $i++) {\n        if ($n % $i == 0) return false;\n    }\n    return true;\n}\nvar_dump(isPrime(29));`,
+  },
+  swap_variables: {
+    python: `a, b = 1, 2\na, b = b, a\nprint(a, b)`,
+    javascript: `let a = 1, b = 2;\n[a, b] = [b, a];\nconsole.log(a, b);`,
+    typescript: `let a: number = 1, b: number = 2;\n[a, b] = [b, a];\nconsole.log(a, b);`,
+    java: `int a = 1, b = 2;\nint temp = a;\na = b;\nb = temp;\nSystem.out.println(a + " " + b);`,
+    cpp: `#include <iostream>\nint main() {\n    int a = 1, b = 2;\n    std::swap(a, b);\n    std::cout << a << " " << b << std::endl;\n    return 0;\n}`,
+    csharp: `int a = 1, b = 2;\n(a, b) = (b, a);\nConsole.WriteLine($"{a} {b}");`,
+    go: `a, b := 1, 2\na, b = b, a\nfmt.Println(a, b)`,
+    rust: `let (mut a, mut b) = (1, 2);\nstd::mem::swap(&mut a, &mut b);\nprintln!("{} {}", a, b);`,
+    ruby: `a, b = 1, 2\na, b = b, a\nputs "#{a} #{b}"`,
+    php: `$a = 1; $b = 2;\n[$a, $b] = [$b, $a];\necho "$a $b";`,
+  },
+};
+
+const CODING_CONCEPTS = {
+  "variable": "A **variable** is a named container that holds a value your program can read or change later — like a labeled box you can put data into and swap out whenever you need to.",
+  "function": "A **function** is a reusable block of code that performs a task, optionally takes inputs (parameters), and optionally returns a result. It lets you write logic once and call it as many times as you want.",
+  "loop": "A **loop** repeats a block of code multiple times — a `for` loop repeats a known number of times, a `while` loop repeats until a condition becomes false.",
+  "array": "An **array** (or list) is an ordered collection of values, accessed by index, usually starting at 0. It's the go-to structure for storing a group of related items.",
+  "object": "An **object** groups related data and behavior together as key-value pairs (fields/properties and methods). It's the basic building block of object-oriented code.",
+  "class": "A **class** is a blueprint for creating objects — it defines the properties (data) and methods (behavior) that every object built from it will have.",
+  "recursion": "**Recursion** is when a function calls itself to solve a smaller version of the same problem, until it hits a base case that stops the calls. Factorial and Fibonacci are classic recursive examples.",
+  "api": "An **API** (Application Programming Interface) is a defined way for one piece of software to talk to another — usually by sending requests to specific URLs and getting structured data back (often JSON).",
+  "algorithm": "An **algorithm** is a step-by-step procedure for solving a problem or completing a task — sorting a list and searching for a value are both classic algorithms.",
+  "boolean": "A **boolean** is a data type with only two possible values: `true` or `false`. It's the basis for all conditional logic (`if` statements).",
+  "string": "A **string** is a sequence of characters (text) — like `\"hello\"`. Most languages let you slice, search, and combine strings with built-in methods.",
+  "integer": "An **integer** is a whole number with no decimal point — positive, negative, or zero.",
+  "pointer": "A **pointer** is a variable that stores the memory address of another variable, rather than a value itself. Common in C/C++/Rust; most higher-level languages hide this from you.",
+  "async": "**Async** (asynchronous) code lets a program start a slow task (like a network request) and keep running other code while it waits, instead of freezing until it finishes.",
+  "promise": "A **Promise** represents a value that isn't ready yet but will be at some point — it resolves (succeeds) or rejects (fails) once the underlying async task completes.",
+  "exception": "An **exception** is an error that occurs during execution. `try/catch` (or `try/except`) blocks let you catch it and handle it gracefully instead of crashing the program.",
+  "inheritance": "**Inheritance** lets one class (a \"subclass\") reuse and extend the properties and methods of another class (a \"parent\" or \"base\" class), avoiding duplicated code.",
+  "interface": "An **interface** defines a contract — a set of methods a class must implement — without specifying how they work. It lets different classes be used interchangeably if they follow the same contract.",
+  "database": "A **database** stores structured data so it can be reliably saved, queried, and updated. SQL databases (like PostgreSQL) use tables and rows; NoSQL databases (like MongoDB) use flexible documents.",
+  "compiler": "A **compiler** translates human-written source code into a form a computer can run directly (machine code or bytecode), usually catching type and syntax errors before the program ever runs.",
+  "git": "**Git** is a version control system that tracks changes to your code over time, letting you save checkpoints (commits), branch off to try things safely, and merge work back together.",
+};
+
+function extractCodeConcept(text) {
+  const lower = text.toLowerCase();
+  return Object.keys(CODING_CONCEPTS).find(k => new RegExp(`\\b${k}s?\\b`).test(lower)) || null;
+}
+
+// ================================================================
 // SECTION 8: EMOTION DETECTION
 // ================================================================
 
@@ -1100,6 +1458,9 @@ const INTENTS = [
   {pattern:/\b(etymology|word origin|origin of the word|history of the word)\b/i,       type:"etymology"},
   {pattern:/\b(idiom|phrase meaning|expression meaning)\b/i,                            type:"idiom"},
   {pattern:/\b(acronym|stands for|what does .+ stand for|abbreviation)\b/i,             type:"acronym"},
+  {pattern:/\b(write (a |an )?(code|program|script|function)|code (for|to)|coding|snippet for|algorithm for|in (python|javascript|typescript|java|c\+\+|c#|go|golang|rust|ruby|php)\b)/i, type:"code"},
+  {pattern:/\b(fizzbuzz|factorial|fibonacci|bubble sort|binary search)\b/i,                type:"code"},
+  {pattern:/\b(solve|quadratic|x\^2|x²|gcd|lcm|nCr|nPr|\d+\s*choose\s*\d+|standard deviation|variance|mean of|median of|mode of|prime factors?|factorize|is\s+\d+\s+(?:a\s+)?prime)\b/i, type:"sci_calc"},
   {pattern:/\b(explain simply|eli5|explain like i.?m 5|simple terms|layman)\b/i,        type:"eli5"},
   {pattern:/\b(explain|elaborate|tell me more|go deeper|expand on|break down)\b/i,      type:"explain"},
   {pattern:/\b(summarize|summary|short version|brief|recap|tldr|key points)\b/i,        type:"summarize"},
@@ -1169,15 +1530,15 @@ function handleMemoryRecall() {
 // ================================================================
 
 const GREETINGS = [
-  "Hey! Ask me anything — define a word, explain a concept, build a guide, compare two things, or just talk.",
-  "Hello! I can define words, explain concepts, build step-by-step guides, research anything live, or just have a conversation.",
-  "Hi there! What do you want to know, explore, or understand today?",
-  "Hey — what are we working on? I can explain, define, research, guide, compare, or discuss anything.",
+  "Hey! Ask me anything — define a word, explain a concept, build a guide, compare two things, solve some math, write some code, or just talk.",
+  "Hello! I can define words, explain concepts, build step-by-step guides, research anything live, solve equations, write code snippets, or just have a conversation.",
+  "Hi there! What do you want to know, explore, calculate, or build today?",
+  "Hey — what are we working on? I can explain, define, research, guide, compare, calculate, or write code.",
 ];
 
 const IDENTITY_RESPONSES = [
-  `I am SONIX v${VERSION} — a communication and knowledge engine. I have a built-in word brain with thousands of words across 120 categories, pattern recognition that turns your questions into structured answers, synonym and antonym maps, word descriptions, step-by-step guides, live research from Wikipedia and DuckDuckGo, math, unit conversion, and more. Just talk naturally.`,
-  `SONIX v${VERSION}. I process the patterns in what you say and build real answers from them. Try: "how to [anything]", "what is [word]", "compare X vs Y", "go slow", "define [word]", "synonyms of [word]", or just ask a question.`,
+  `I am SONIX v${VERSION} — a communication and knowledge engine. I have a built-in word brain with thousands of words across 120 categories, pattern recognition that turns your questions into structured answers, synonym and antonym maps, a scientific calculator (algebra, statistics, number theory), a code engine covering 10 languages, and live research across Wikipedia, DuckDuckGo, arXiv, and Stack Overflow that kicks in automatically whenever I don't recognize a topic locally. Just talk naturally.`,
+  `SONIX v${VERSION}. I process the patterns in what you say and build real answers from them — and when I don't know something locally, I go research it live instead of guessing. Try: "how to [anything]", "what is [word]", "compare X vs Y", "solve 2x+3=7", "fizzbuzz in python", or just ask a question.`,
 ];
 
 const HELP_TEXT = `**SONIX v${VERSION} — what I can do:**
@@ -1201,8 +1562,12 @@ const HELP_TEXT = `**SONIX v${VERSION} — what I can do:**
 • \`[idiom phrase]\` — meaning explained
 • \`rhymes with [word]\`
 
-🔍 **Live research** — Wikipedia + DuckDuckGo (say "search [topic]")
-🧮 **Math** — arithmetic, percent, conversions, BMI, mortgage, compound interest
+🔍 **Live research** — Wikipedia, DuckDuckGo, arXiv, and Stack Overflow. I now use these **automatically** whenever a topic isn't in my local brain — you don't have to say "search" first, though you still can.
+
+🧮 **Scientific Calculator** — arithmetic, percent, unit conversion, BMI, mortgage, compound interest, **plus** linear & quadratic equations (\`solve 2x+3=7\`, \`x^2-5x+6=0\`), GCD/LCM, combinations & permutations (\`5 choose 2\`), prime checks & factorization, and statistics (mean/median/mode/std dev on a list of numbers).
+
+💻 **Code Engine** — ready-made snippets in Python, JavaScript, TypeScript, Java, C++, C#, Go, Rust, Ruby, and PHP for common tasks like FizzBuzz, factorial, Fibonacci, string reversal, palindrome checks, sorting, binary search, prime checks, and variable swaps (e.g. \`"fizzbuzz in java"\`). I can also explain core programming concepts (function, recursion, API, class, etc.) and fall back to a live Stack Overflow search for anything else.
+
 😄 **Fun** — live jokes, quotes, trivia, facts, motivation, roasts
 
 Just talk naturally — no special commands needed.`;
@@ -1525,6 +1890,29 @@ async function chat(userText, options = {}) {
     else if(/mortgage|loan/i.test(text)){const r=handleMortgage(text);if(r)response=emo+r;}
     else if(/compound|interest/i.test(text)){const r=handleCompound(text);if(r)response=emo+r;}
   }
+  if (!response && intent === "sci_calc") {
+    const r = scientificCalc(text);
+    if (r) response = emo + r;
+  }
+
+  // Code
+  if (!response && intent === "code") {
+    const lang = detectCodeLanguage(text) || "python";
+    const task = detectCodeTask(text);
+    if (task && CODE_SNIPPETS[task] && CODE_SNIPPETS[task][lang]) {
+      response = emo + `**${CODE_TASK_TITLES[task]} — ${LANG_NAMES[lang]}**\n\n\`\`\`${lang}\n${CODE_SNIPPETS[task][lang]}\n\`\`\``;
+    } else if (task) {
+      response = emo + `I don't have a ready-made **${LANG_NAMES[lang]||lang}** snippet for this yet, so here it is in Python — the logic carries over directly:\n\n\`\`\`python\n${CODE_SNIPPETS[task]["python"]}\n\`\`\`\n\n🔗 [Search "${CODE_TASK_TITLES[task]} in ${lang}" on Stack Overflow](https://stackoverflow.com/search?q=${encodeURIComponent(CODE_TASK_TITLES[task]+" "+lang)})`;
+    } else {
+      const concept = CODING_CONCEPTS[extractCodeConcept(text)];
+      if (concept) {
+        response = emo + concept;
+      } else {
+        const live = await searchStackExchange(text);
+        response = emo + (live || `I have ready-made snippets for: ${Object.values(CODE_TASK_TITLES).join(", ")} — in ${Object.values(LANG_NAMES).join(", ")}.\n\nTry: "fizzbuzz in python" or "binary search in java".\n\n🔗 [Search Stack Overflow](https://stackoverflow.com/search?q=${encodeURIComponent(text)})`);
+      }
+    }
+  }
 
   // Memory
   if (!response && intent === "memory_set")    response = handleMemorySet(text);
@@ -1535,7 +1923,7 @@ async function chat(userText, options = {}) {
   }
 
   // Meta
-  if (!response && intent === "version")   response = `SONIX v${VERSION} — ${MODEL}. Pattern engine, 10,000+ word brain, 120 categories, 600+ synonym pairs, live research.`;
+  if (!response && intent === "version")   response = `SONIX v${VERSION} — ${MODEL}. Pattern engine, 10,000+ word brain, 120 categories, 600+ synonym pairs, scientific calculator, 10-language code engine, and proactive live research (Wikipedia, DuckDuckGo, arXiv, Stack Overflow).`;
   if (!response && intent === "creator")   response = `SONIX is an AI model built for communication, vocabulary, and knowledge. Ask me anything.`;
   if (!response && intent === "greeting")  response = GREETINGS[Math.floor(Math.random()*GREETINGS.length)];
   if (!response && intent === "identity")  response = IDENTITY_RESPONSES[Math.floor(Math.random()*IDENTITY_RESPONSES.length)];
@@ -1550,8 +1938,20 @@ async function chat(userText, options = {}) {
     response = emo + await masterResearch(q);
   }
 
-  // Final fallback — always intelligent
-  if (!response) response = emo + generalFallback(text);
+  // Final fallback — always intelligent, and now proactively researches
+  // unfamiliar topics instead of only doing so when explicitly asked
+  if (!response) {
+    const fallbackWords = text.toLowerCase().replace(/[^a-z\s]/g,"").split(/\s+/).filter(w=>w.length>2);
+    const knownLocally = fallbackWords.find(w => WORD_INDEX[w] || SYNONYM_MAP[w] || ANTONYM_MAP[w] || WORD_DESCRIPTIONS[w]);
+    const looksLikeQuestion = fallbackWords.length >= 2;
+    if (!knownLocally && looksLikeQuestion) {
+      const researchSubject = (rawSubject && rawSubject !== "this") ? rawSubject : text;
+      const live = await masterResearch(researchSubject);
+      response = emo + (live && !/^No live results/.test(live) ? live : generalFallback(text));
+    } else {
+      response = emo + generalFallback(text);
+    }
+  }
 
   _lastResponse = response;
   _memory.push({ role:"assistant", content:response });
@@ -1610,6 +2010,21 @@ const SonixModel = {
   mortgage:        handleMortgage,
   compound:        handleCompound,
 
+  // Scientific calculator
+  solveLinear,
+  solveQuadratic,
+  gcdLcm,
+  combinatorics,
+  primeCheck,
+  statSummary,
+  scientificCalc,
+
+  // Code engine
+  codeSnippet:     (task, lang) => (CODE_SNIPPETS[task] && CODE_SNIPPETS[task][lang]) || null,
+  codeTasks:       () => Object.keys(CODE_TASK_TITLES),
+  codeLanguages:   () => Object.values(LANG_NAMES),
+  explainConcept:  (w) => CODING_CONCEPTS[w.toLowerCase()] || null,
+
   // Live sources
   research:        masterResearch,
   live: {
@@ -1620,6 +2035,8 @@ const SonixModel = {
     joke:       fetchLiveJoke,
     advice:     fetchAdvice,
     trivia:     fetchTrivia,
+    arxiv:      fetchArxiv,
+    stackoverflow: searchStackExchange,
   },
 
   // Detection
@@ -1657,7 +2074,10 @@ const SonixModel = {
         jokes: JOKES.length,
         motivations: MOTIVATIONS.length,
         intentPatterns: INTENTS.length,
-        liveSources: 7,
+        liveSources: 9,
+        codeTasks: Object.keys(CODE_TASK_TITLES).length,
+        codeLanguages: Object.keys(LANG_NAMES).length,
+        codingConcepts: Object.keys(CODING_CONCEPTS).length,
       },
     };
   },
@@ -1669,7 +2089,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = SonixModel
 // Boot log
 const _s = SonixModel.getStats().knowledgeBase;
 console.log(
-  `%c[SONIX v${VERSION} · ${MODEL}] Words: ${_s.wordBrainTotal} · Categories: ${_s.wordBrainCategories} · Synonym sets: ${_s.synonymSets} · Antonym sets: ${_s.antonymSets} · Descriptions: ${_s.wordDescriptions} · Patterns: ${_s.patternTypes} · Idioms: ${_s.idioms} · Etymologies: ${_s.etymologies} · Intents: ${_s.intentPatterns} · Live sources: ${_s.liveSources}`,
+  `%c[SONIX v${VERSION} · ${MODEL}] Words: ${_s.wordBrainTotal} · Categories: ${_s.wordBrainCategories} · Synonym sets: ${_s.synonymSets} · Antonym sets: ${_s.antonymSets} · Descriptions: ${_s.wordDescriptions} · Patterns: ${_s.patternTypes} · Idioms: ${_s.idioms} · Etymologies: ${_s.etymologies} · Intents: ${_s.intentPatterns} · Live sources: ${_s.liveSources} · Code tasks: ${_s.codeTasks}×${_s.codeLanguages} langs · Coding concepts: ${_s.codingConcepts}`,
   "color:#00ff41;font-weight:bold;background:#000;padding:3px 10px;border-radius:4px;"
 );
 
