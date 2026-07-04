@@ -8,7 +8,7 @@
  *   a real, non-repeating, contextual response.
  *
  * USAGE:
- *   <script src="https://raw.githack.com/YOUR/REPO/main/sonix-model.js"></script>
+ *   Load this file as a script (via src=, or embedded inline), then:
  *   SonixModel.chat("how to throw") => Promise<string>
  *   SonixModel.chat("what is courage") => Promise<string>
  *   SonixModel.chat("go slow") => Promise<string>
