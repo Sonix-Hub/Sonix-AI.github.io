@@ -1505,7 +1505,7 @@ function detectIntent(text) {
 // ================================================================
 
 const MAX_MEMORY = 60;
-let _memory = [], _userName = null, _apiHandler = null;
+let _memory = [], _userName = null, _apiHandler = null, _persona = "default";
 let _topicHistory = [], _wordHistory = [], _sessionStart = Date.now();
 let _lastResponse = "", _turnCount = 0;
 
@@ -1955,6 +1955,9 @@ async function chat(userText, options = {}) {
 
   _lastResponse = response;
   _memory.push({ role:"assistant", content:response });
+  if (_persona === "formal" || _persona === "professional") {
+    response = response.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/[ \t]{2,}/g," ").trim();
+  }
   return response;
 }
 
@@ -1970,6 +1973,8 @@ const SonixModel = {
   // Memory
   setUserName(n)   { _userName = n; },
   getUserName()    { return _userName; },
+  setPersona(p)    { _persona = (typeof p === "string" && p.trim()) ? p.trim().toLowerCase() : "default"; },
+  getPersona()     { return _persona; },
   clearMemory()    { _memory=[]; _topicHistory=[]; _wordHistory=[]; _turnCount=0; _sessionStart=Date.now(); },
   getMemory()      { return [..._memory]; },
 
