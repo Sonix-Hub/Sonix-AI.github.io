@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SONIX — Full Guide</title>
+<style>
+    :root { --accent: #00ff41; --bg: #000; --card: #0d0d0d; --border: #232323; --text: #ddd; --dim: #777; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: 'SF Mono', Consolas, 'Courier New', monospace; line-height: 1.6; }
+    a { color: var(--accent); }
+
+    .topbar { position: sticky; top: 0; z-index: 50; background: rgba(0,0,0,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .back-btn { background: transparent; border: 1px solid #333; color: #ccc; border-radius: 10px; padding: 8px 14px; font-size: 0.8rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .topbar h1 { font-size: 1rem; margin: 0; color: var(--accent); letter-spacing: 1px; flex-shrink: 0; }
+    .search-wrap { flex: 1; min-width: 200px; position: relative; }
+    #search-input { width: 100%; background: #111; border: 1px solid #333; border-radius: 10px; padding: 9px 14px; color: white; font-size: 0.85rem; outline: none; font-family: inherit; }
+    #search-input:focus { border-color: var(--accent); }
+    #search-status { font-size: 0.7rem; color: var(--dim); padding: 6px 18px 0; }
+    #search-status b { color: var(--accent); }
+
+    .wrap { max-width: 840px; margin: 0 auto; padding: 24px 18px 80px; }
+    .intro { color: var(--dim); font-size: 0.88rem; margin-bottom: 28px; }
+    .intro b { color: var(--accent); }
+
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
+    .toc a { background: #0d0d0d; border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; font-size: 0.74rem; text-decoration: none; color: #aaa; }
+    .toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+    .section-title { font-size: 1.1rem; color: var(--accent); margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); letter-spacing: 0.5px; }
+    .section-title:first-of-type { margin-top: 0; }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; transition: 0.15s; }
+    .card.hidden { display: none; }
+    .card.match-highlight { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(0,255,65,0.25); }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .card-title { font-size: 0.94rem; font-weight: 700; color: #eee; }
+    .badge { font-size: 0.62rem; padding: 3px 9px; border-radius: 8px; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 700; flex-shrink: 0; }
+    .badge.safe { background: rgba(0,255,65,0.1); color: var(--accent); border: 1px solid rgba(0,255,65,0.3); }
+    .badge.caution { background: rgba(255,191,0,0.1); color: #ffbf00; border: 1px solid rgba(255,191,0,0.3); }
+    .badge.risk { background: rgba(255,68,68,0.1); color: #ff5555; border: 1px solid rgba(255,68,68,0.3); }
+    .card-desc { font-size: 0.82rem; color: #bbb; margin-bottom: 8px; }
+    .card-steps { font-size: 0.8rem; color: #999; margin: 8px 0 0; padding-left: 18px; }
+    .card-steps li { margin-bottom: 3px; }
+    .card-example { background: #000; border: 1px solid #1a1a1a; border-radius: 8px; padding: 8px 12px; margin-top: 10px; font-size: 0.76rem; color: var(--accent); }
+    .card-example b { color: #666; font-weight: 400; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.5px; margin-right: 8px; }
+    mark { background: rgba(0,255,65,0.35); color: #fff; border-radius: 3px; }
+
+    #no-results { display: none; text-align: center; color: var(--dim); padding: 40px 0; font-size: 0.85rem; }
+    footer { text-align: center; color: #444; font-size: 0.72rem; margin-top: 50px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <a href="app.html" class="back-btn">&larr; Back to App</a>
+    <h1>SONIX GUIDE</h1>
+    <div class="search-wrap">
+        <input id="search-input" placeholder="Search for a button, feature, or word (e.g. 'voice', 'map', 'export')..." oninput="runSearch(this.value)">
+    </div>
+</div>
+<div id="search-status"></div>
+
+<div class="wrap">
+    <p class="intro">
+        This page explains <b>every button and feature</b> in SONIX — what it does, how to use it, and whether it's
+        safe to use freely or needs a bit of care. Nothing here requires the app itself; read this on its own, or
+        keep it open in a second tab while you use SONIX.
+    </p>
+
+    <div class="toc">
+        <a href="#getting-started">Getting Started</a>
+        <a href="#chatting">Chatting</a>
+        <a href="#code-map">Code &amp; Map</a>
+        <a href="#sessions">Sessions</a>
+        <a href="#models">System Models</a>
+        <a href="#settings">Settings &amp; Security</a>
+        <a href="#safety">Safety Notes</a>
+    </div>
+
+    <div id="no-results">No guides matched your search. Try a different word — e.g. "voice", "delete", "key", or "map".</div>
+
+    <!-- ============ GETTING STARTED ============ -->
+    <div class="section-title" id="getting-started">Getting Started</div>
+
+    <div class="card" data-keywords="sign up register account create">
+        <div class="card-head"><div class="card-title">Create an Account / Log In</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Creates a local account so your chats and settings are saved on this device. Nothing is sent anywhere — SONIX has no server.</div>
+        <ol class="card-steps"><li>Enter an email and password (used only to identify you on this device — not verified or sent anywhere)</li><li>Choose "Register" for a new account or "Log In" if you already have one</li></ol>
+    </div>
+
+    <div class="card" data-keywords="guest continue as guest no account">
+        <div class="card-head"><div class="card-title">Continue as Guest</div><span class="badge caution">Caution</span></div>
+        <div class="card-desc">Lets you use SONIX without an account. The trade-off: guest chats are <b>not saved</b> — closing the app loses them.</div>
+    </div>
+
+    <div class="card" data-keywords="2fa two factor authentication pin pattern fingerprint biometric verification code security login">
+        <div class="card-head"><div class="card-title">Two-Factor Authentication (2FA)</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Adds a second step after your password, in Settings → System &amp; Security → 2FA Verification. Pick one method:</div>
+        <ol class="card-steps">
+            <li><b>PIN Code</b> — a 4-digit code you set and re-enter at login</li>
+            <li><b>Pattern Lock</b> — draw a connect-the-dots pattern (like Android's lock screen)</li>
+            <li><b>Fingerprint / Face</b> — uses your device's own biometric hardware (Face ID / Touch ID / Windows Hello) through the browser. This never leaves your device.</li>
+            <li><b>Verification Code</b> — since SONIX has no server to email a real code, a 6-digit code is shown right on your screen at login and you type it back in. It's still a genuine second step, just delivered on-device instead of by email.</li>
+        </ol>
+    </div>
+
+    <!-- ============ CHATTING ============ -->
+    <div class="section-title" id="chatting">Chatting</div>
+
+    <div class="card" data-keywords="send message text type">
+        <div class="card-title">Sending a Message</div>
+        <div class="card-desc">Type in the box at the bottom and hit send (or Enter). Whichever model is active in System Models will reply.</div>
+    </div>
+
+    <div class="card" data-keywords="attach file image upload plus button">
+        <div class="card-head"><div class="card-title">Attaching a File or Image</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Tap the <b>+</b> button next to the input box, then "File." Images preview inline; other files show as a document card. Both get <b>Save</b> and <b>Delete</b> buttons — tap the ⋮ on the attachment to reveal them.</div>
+    </div>
+
+    <div class="card" data-keywords="voice message record microphone mic audio transcript">
+        <div class="card-head"><div class="card-title">Voice Messages</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Tap the microphone icon to start recording — a bar appears showing elapsed time.</div>
+        <ol class="card-steps"><li>Tap the mic to start recording</li><li>Tap <b>Send</b> in the recording bar to finish and send it, or <b>Cancel</b> to discard it</li><li>Your voice is transcribed live, in-browser, so the AI understands what you said</li><li>The message appears as a playable waveform bubble with Save/Delete options</li></ol>
+        <div class="card-example"><b>Note</b>Transcription runs locally in your browser — nothing is uploaded to transcribe it.</div>
+    </div>
+
+    <div class="card" data-keywords="edit delete copy save message action buttons long press tap">
+        <div class="card-title">Message Actions</div>
+        <div class="card-desc">Tap any message to reveal action buttons — they change based on what was sent:</div>
+        <ol class="card-steps">
+            <li><b>Text messages (yours):</b> Copy, Edit, Delete</li>
+            <li><b>Text messages (AI's):</b> Copy, Retry, Search, Share, Delete</li>
+            <li><b>Files, images, voice messages:</b> Save, Delete</li>
+        </ol>
+    </div>
+
+    <!-- ============ CODE & MAP ============ -->
+    <div class="section-title" id="code-map">Code &amp; the Live Map</div>
+
+    <div class="card" data-keywords="code preview snippet artifact language download copy fullscreen svg image">
+        <div class="card-head"><div class="card-title">Code Cards (Preview / Code)</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">When the AI sends code, it appears as a card instead of raw text, with:</div>
+        <ol class="card-steps">
+            <li><b>Preview</b> — for HTML, CSS, JavaScript, and SVG, runs the code live in a sandboxed frame (only shown for languages with something visual to render)</li>
+            <li><b>Code</b> — the raw source, in a scrollable box (huge files load in chunks so they don't lag)</li>
+            <li><b>Copy</b> — copies the code to your clipboard</li>
+            <li><b>Download</b> — saves it as a real file on your device, with the correct extension</li>
+            <li><b>Fullscreen</b> (on previewable code) — opens the preview full-size, with its own Preview/Code switcher</li>
+        </ol>
+        <div class="card-example"><b>Try asking</b>"fizzbuzz in python" · "hello world in java" · draw an svg circle</div>
+    </div>
+
+    <div class="card" data-keywords="live map location address country city street green grid geocoding">
+        <div class="card-head"><div class="card-title">Live Map</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">When the AI's reply mentions a place — or you explicitly ask for one — a small map bubble appears automatically, styled green-on-black. Uses free, keyless map data (OpenStreetMap), no account involved.</div>
+        <ol class="card-steps"><li>Tap <b>Fullscreen</b> on a map bubble for the full interactive map</li><li>Use the search bar inside to look up any place directly</li><li>Toggle the coordinate <b>Grid</b> on/off</li><li>The badge on each map (e.g. "City", "Country") shows exactly what kind of place was matched, so it's never ambiguous</li></ol>
+        <div class="card-example"><b>Try asking</b>"map of Tokyo" · "where is the Eiffel Tower located"</div>
+    </div>
+
+    <!-- ============ SESSIONS ============ -->
+    <div class="section-title" id="sessions">Sessions</div>
+
+    <div class="card" data-keywords="rename session name">
+        <div class="card-title">Rename</div>
+        <div class="card-desc">Long-press (or tap ⋮) on a session in the sidebar, then "Rename" to give it a custom title instead of the auto-generated one.</div>
+    </div>
+
+    <div class="card" data-keywords="favorite favourite star pin important">
+        <div class="card-title">Add to Favorites</div>
+        <div class="card-desc">Marks a session so you can find it quickly later, without deleting or archiving anything.</div>
+    </div>
+
+    <div class="card" data-keywords="save bookmark session">
+        <div class="card-title">Save</div>
+        <div class="card-desc">A separate marker from Favorites — use it however suits you, e.g. "things to revisit."</div>
+    </div>
+
+    <div class="card" data-keywords="archive hide session">
+        <div class="card-title">Archive</div>
+        <div class="card-desc">Moves a session out of your main list without deleting it — useful for decluttering without losing history.</div>
+    </div>
+
+    <div class="card" data-keywords="export chat download backup txt file">
+        <div class="card-head"><div class="card-title">Export Chat</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Downloads the whole conversation as a plain <code>.txt</code> file to your device. This is your own personal backup — SONIX keeps no copy of it once it's downloaded.</div>
+    </div>
+
+    <div class="card" data-keywords="delete session remove permanently">
+        <div class="card-head"><div class="card-title">Delete</div><span class="badge risk">Careful</span></div>
+        <div class="card-desc">Moves a session to a temporary "deleted" state. Confirm carefully — this removes it from your device's storage.</div>
+    </div>
+
+    <div class="card" data-keywords="search chat find word conversation match">
+        <div class="card-head"><div class="card-title">Search Chat</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Opens a slim search bar at the top of the conversation (it never covers the chat). Type a word to highlight every match, with a counter and up/down arrows to jump between them — similar to Ctrl+F.</div>
+    </div>
+
+    <div class="card" data-keywords="files links images voice code media jump gallery">
+        <div class="card-head"><div class="card-title">Files &amp; Links</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">A gallery of everything exchanged in a session, sorted into tabs: <b>Images, Links, Files, Voice, Code</b>. Tap anything to jump straight to that exact message in the conversation — no more scrolling through a long chat to find something.</div>
+    </div>
+
+    <!-- ============ SYSTEM MODELS ============ -->
+    <div class="section-title" id="models">System Models</div>
+
+    <div class="card" data-keywords="sonix core default built in model">
+        <div class="card-title">SONIX Core</div>
+        <div class="card-desc">The original built-in model. Always available, can't be removed, and needs nothing set up.</div>
+    </div>
+
+    <div class="card" data-keywords="free model quick devtoolbox no key no login">
+        <div class="card-head"><div class="card-title">Quick Free AI</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">A free built-in model with no login, signup, or key required. Good for short chats. Being a small free service, it can occasionally be slower or briefly unavailable.</div>
+    </div>
+
+    <div class="card" data-keywords="custom model add api key link endpoint connect">
+        <div class="card-head"><div class="card-title">Adding Your Own Model</div><span class="badge caution">Read First</span></div>
+        <div class="card-desc">In System Models → "Add Custom Model," paste an API link (required) and a key (only if that API needs one).</div>
+        <ol class="card-steps"><li>The link is tested automatically in the background right after saving</li><li>A green dot means connected and working; red means the last test failed, with the reason shown</li><li>A "Network/CORS error" specifically means the browser blocked reading the response — this can happen even when the API genuinely works, because it usually means the server doesn't allow cross-site requests. That's a setting on the API's side, not something fixable from here.</li></ol>
+    </div>
+
+    <!-- ============ SETTINGS & SECURITY ============ -->
+    <div class="section-title" id="settings">Settings &amp; Security</div>
+
+    <div class="card" data-keywords="app details storage local device server">
+        <div class="card-head"><div class="card-title">App Details</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Explains exactly how SONIX stores your data (locally, no server) and what that means practically — tap the "ℹ Where is my data stored?" button to expand it.</div>
+    </div>
+
+    <div class="card" data-keywords="export all data import backup json">
+        <div class="card-head"><div class="card-title">Export / Import All Data</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">Export All Data saves everything (sessions, settings, models) as one file you control. Import Data restores from that file — useful when switching devices, since nothing syncs automatically.</div>
+    </div>
+
+    <div class="card" data-keywords="clear chat delete all data wipe">
+        <div class="card-head"><div class="card-title">Clear Current Chat / Clear All Data</div><span class="badge risk">Careful</span></div>
+        <div class="card-desc">Permanently erases what it says — the current conversation, or literally everything SONIX has stored on this device. There's no undo once confirmed.</div>
+    </div>
+
+    <!-- ============ SAFETY NOTES ============ -->
+    <div class="section-title" id="safety">Safety Notes</div>
+
+    <div class="card" data-keywords="api key password share risk safe secret">
+        <div class="card-head"><div class="card-title">API Keys vs. Links — what's actually risky</div><span class="badge risk">Important</span></div>
+        <div class="card-desc">An <b>API key</b> works like a password: anyone who has it can use your account and run up your usage or charges. Never share it, and never paste one someone told you to keep secret. An <b>API link</b> alone is usually far less risky to share, since most links don't work without a key too — but avoid sharing a link that has a key baked directly into the URL.</div>
+    </div>
+
+    <div class="card" data-keywords="local storage browser data privacy no server safe">
+        <div class="card-head"><div class="card-title">Everything Stays On Your Device</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc">SONIX has no backend server. Chats, settings, custom model keys — all of it lives only in this browser's local storage. Nothing is transmitted anywhere except the direct requests you explicitly trigger (like a custom model call, or a map/research lookup).</div>
+    </div>
+
+    <div class="card" data-keywords="clear browser data uninstall lose everything backup">
+        <div class="card-head"><div class="card-title">This Also Means: No Automatic Backup</div><span class="badge caution">Caution</span></div>
+        <div class="card-desc">Clearing your browser's site data, or switching devices/browsers, erases everything with no way to recover it — because there's no server copy to restore from. Use <b>Export All Data</b> or <b>Export Chat</b> periodically if you want a personal backup.</div>
+    </div>
+
+    <div class="card" data-keywords="sonix core limitations coding not real ai model template">
+        <div class="card-head"><div class="card-title">SONIX Core's Real Limits</div><span class="badge caution">Honest Note</span></div>
+        <div class="card-desc">SONIX Core is a pattern-matching engine, not a full language model — its code library covers about a dozen common exercises (FizzBuzz, sorting, etc.) across 10 languages. Ask for something outside that list and it will say so honestly rather than guess. For open-ended coding help, connect a real model under System Models instead.</div>
+    </div>
+
+    <footer>SONIX — everything above runs locally in your browser. This guide is a static page and makes no network requests on its own.</footer>
+</div>
+
+<script>
+function runSearch(query) {
+    const q = query.trim().toLowerCase();
+    const cards = document.querySelectorAll('.card');
+    const status = document.getElementById('search-status');
+    const noResults = document.getElementById('no-results');
+
+    if (!q) {
+        cards.forEach(c => { c.classList.remove('hidden', 'match-highlight'); _unmark(c); });
+        status.innerHTML = '';
+        noResults.style.display = 'none';
+        return;
+    }
+
+    let visibleCount = 0;
+    cards.forEach(c => {
+        const keywords = (c.dataset.keywords || '').toLowerCase();
+        const text = c.textContent.toLowerCase();
+        const isMatch = keywords.includes(q) || text.includes(q);
+        c.classList.toggle('hidden', !isMatch);
+        c.classList.toggle('match-highlight', isMatch);
+        _unmark(c);
+        if (isMatch) { visibleCount++; _markText(c, q); }
+    });
+
+    status.innerHTML = visibleCount > 0
+        ? `<b>${visibleCount}</b> guide${visibleCount !== 1 ? 's' : ''} available for "${_esc(query)}"`
+        : `No guides available for "${_esc(query)}"`;
+    noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+}
+
+function _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function _markText(card, q) {
+    const titleEl = card.querySelector('.card-title');
+    if (!titleEl) return;
+    const original = titleEl.textContent;
+    if (original.toLowerCase().includes(q)) {
+        const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+        titleEl.innerHTML = original.replace(re, '<mark>$1</mark>');
+    }
+}
+function _unmark(card) {
+    const titleEl = card.querySelector('.card-title');
+    if (titleEl && titleEl.querySelector('mark')) titleEl.textContent = titleEl.textContent;
+}
+</script>
+</body>
+</html>
