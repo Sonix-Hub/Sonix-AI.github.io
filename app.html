@@ -182,7 +182,7 @@
         .ai { align-self: flex-start; background: var(--ai-bubble); color: var(--text-ai); border: 1px solid var(--accent); border-bottom-left-radius: 5px; }
         .user { align-self: flex-end; background: var(--user-bubble); color: var(--text-user); font-weight: 600; border-bottom-right-radius: 5px; white-space: pre-wrap; }
         .system-msg { align-self: center; color: #333; font-size: 0.72rem; letter-spacing: 1px; padding: 4px 0; }
-        .typing-bubble { align-self: flex-start; background: var(--ai-bubble); border: 1px solid var(--accent); border-bottom-left-radius: 5px; border-radius: 20px; padding: 14px 18px; display: none; }
+        .typing-bubble { align-self: flex-start; background: none; border: none; padding: 10px 4px; display: none; }
         .typing-dots { display: flex; gap: 5px; }
         .typing-dots span { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: blink 1.2s infinite; }
         .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -407,12 +407,19 @@
         .app-details-box { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 12px; padding: 14px; font-size: 0.76rem; color: #888; line-height: 1.7; }
         .app-details-box b { color: var(--accent); }
 
-        .welcome-quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: -2px 0 12px; }
+        .welcome-quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: -2px 0 12px; justify-content: center; }
         .welcome-quick-btn { background: #111; border: 1px solid var(--accent); color: var(--accent); border-radius: 20px; padding: 7px 16px; font-size: 0.76rem; cursor: pointer; font-weight: 600; transition: 0.2s; }
         .welcome-quick-btn:hover { background: rgba(0,255,65,0.1); }
-
-        .session-project-tag { font-size: 0.58rem; letter-spacing: 1.5px; color: #00bfff; border: 1px solid rgba(0,191,255,0.3); background: rgba(0,191,255,0.08); border-radius: 6px; padding: 2px 7px; display: inline-block; margin: 2px 0 0 0; font-weight: 700; }
-        .ai-activity-label { font-size: 0.7rem; color: #666; margin-bottom: 6px; }
+        .welcome-hero { text-align: center; color: #888; font-size: 0.92rem; padding: 36px 20px 4px; background: none; border: none; }
+        .ai-activity-label {
+            font-size: 0.75rem; font-weight: 500; margin-bottom: 6px;
+            background: linear-gradient(90deg, #3a3a3a 0%, #eee 50%, #3a3a3a 100%);
+            background-size: 200% 100%;
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            animation: shimmerText 1.6s linear infinite, fadeInQuick 0.22s ease;
+        }
+        @keyframes shimmerText { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes fadeInQuick { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
         /* ============ TWO-FACTOR AUTH ============ */
         .twofa-method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
@@ -1176,7 +1183,7 @@
         <button class="chat-search-close-btn" onclick="closeChatSearch()" title="Close">&#10005;</button>
     </div>
     <div id="chat-window">
-        <div class="bubble ai" id="welcome-msg">SONIX Active. How can I help you today?</div>
+        <div class="welcome-hero" id="welcome-msg">Hello, SONIX ready to help you</div>
         <div class="typing-bubble" id="typing-indicator">
             <div class="typing-dots"><span></span><span></span><span></span></div>
         </div>
@@ -1817,7 +1824,7 @@ function startApp(guest = false) {
     if (guest) {
         // Guest always gets a fresh welcome
         const w = document.getElementById('welcome-msg');
-        if (w) w.textContent = 'SONIX Active. Welcome. How can I help you today?';
+        if (w) w.textContent = 'Hello, SONIX ready to help you';
         attachWelcomeQuickActions();
     } else if (!currentSessionId) {
         // Logged in but no sessions yet — create one
@@ -1862,7 +1869,7 @@ function logout() {
     document.getElementById('app-body').classList.remove('menu-open');
     document.getElementById('menuToggle').classList.remove('open');
     document.getElementById('guest-banner').classList.remove('show');
-    document.getElementById('chat-window').innerHTML = '<div class="bubble ai" id="welcome-msg">SONIX Active. How can I help you today?</div><div class="typing-bubble" id="typing-indicator"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+    document.getElementById('chat-window').innerHTML = '<div class="welcome-hero" id="welcome-msg">Hello, SONIX ready to help you</div><div class="typing-bubble" id="typing-indicator"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
     attachWelcomeQuickActions();
     document.getElementById('auth-email').value = '';
     document.getElementById('auth-pass').value = '';
@@ -2240,9 +2247,9 @@ function newSession(silent = false) {
     const chat = document.getElementById('chat-window');
     chat.innerHTML = '<div class="typing-bubble" id="typing-indicator"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
     const welcome = document.createElement('div');
-    welcome.className = 'bubble ai';
+    welcome.className = 'welcome-hero';
     welcome.id = 'welcome-msg';
-    welcome.textContent = 'SONIX Active. New session started, ' + (currentUser?.name || 'User') + '. How can I help you today?';
+    welcome.textContent = 'Hello, SONIX ready to help you';
     chat.insertBefore(welcome, document.getElementById('typing-indicator'));
     attachWelcomeQuickActions();
     if (!silent) { toggleMenu(); showToast('New session started'); }
@@ -2291,12 +2298,6 @@ function renderSessionList(filter = '') {
         dateSpan.textContent = formatSessionDate(s.created);
         content.appendChild(nameSpan); content.appendChild(dateSpan);
         d.appendChild(content);
-        if (s.isProject) {
-            const projTag = document.createElement('div');
-            projTag.className = 'session-project-tag';
-            projTag.textContent = 'PROJECT';
-            d.appendChild(projTag);
-        }
         if (s._favorite || s._saved) {
             const badges = document.createElement('div');
             badges.className = 'session-badges';
@@ -2379,9 +2380,9 @@ function loadSession(id, skipMenu = false) {
 
     if (s.messages.length === 0) {
         const empty = document.createElement('div');
-        empty.className = 'bubble ai';
+        empty.className = 'welcome-hero';
         empty.id = 'welcome-msg';
-        empty.textContent = 'SONIX Active. New session started, ' + (currentUser?.name || 'User') + '. How can I help you today?';
+        empty.textContent = 'Hello, SONIX ready to help you';
         chat.insertBefore(empty, document.getElementById('typing-indicator'));
         attachWelcomeQuickActions();
     } else {
@@ -3512,7 +3513,7 @@ function sendMsg() {
     input.value = ''; selectedFiles = []; renderFiles();
     chat.scrollTop = chat.scrollHeight;
 
-    if (settings.typing) { showAIActivity(userText); typing.style.display = 'block'; chat.scrollTop = chat.scrollHeight; }
+    if (settings.typing) { showAIActivity(); typing.style.display = 'block'; chat.scrollTop = chat.scrollHeight; }
 
     const _sentText = userText;
 
@@ -4143,7 +4144,7 @@ function sendVoiceMessage(dataUrl, durationSecs, transcript) {
     _sendLock = true;
     const messageForAI = cleanTranscript ||
         "The user sent a voice message but it couldn't be transcribed on this device. Let them know you received their voice message, and ask them to also type it if their browser can't transcribe audio.";
-    if (settings.typing) { showAIActivity(messageForAI); typing.style.display = 'block'; chat.scrollTop = chat.scrollHeight; }
+    if (settings.typing) { showAIActivity(); typing.style.display = 'block'; chat.scrollTop = chat.scrollHeight; }
 
     getAIReply(messageForAI, []).then(result => {
         typing.style.display = 'none';
@@ -4602,7 +4603,6 @@ function attachWelcomeQuickActions() {
     [
         { label: 'Custom Model', fn: quickActionCustomModel },
         { label: 'Help', fn: quickActionHelp },
-        { label: 'Project', fn: quickActionProject },
     ].forEach(a => {
         const btn = document.createElement('button');
         btn.className = 'welcome-quick-btn';
@@ -4624,24 +4624,16 @@ function quickActionProject() {
 }
 
 // Shows a brief "what the AI seems to be doing" hint above the typing dots
-function inferActivityLabel(text) {
-    const t = (text || '').toLowerCase();
-    if (/\b(search|look up|research|find (out|info)|wikipedia|latest|news|who is|what is)\b/.test(t)) return '🔍 Searching…';
-    if (/\b(code|program|script|function|snippet|algorithm|fizzbuzz|debug|html|python|java|javascript|luau)\b/.test(t)) return '💻 Writing code…';
-    if (/\b(map|location|address|where is)\b/.test(t)) return '🗺️ Finding location…';
-    if (/\b(calculate|solve|math|equation|gcd|lcm|factorial)\b/.test(t)) return '🧮 Calculating…';
-    return '💬 Thinking…';
-}
-function showAIActivity(text) {
+function showAIActivity() {
     const typing = document.getElementById('typing-indicator');
     if (!typing) return;
     let label = typing.querySelector('.ai-activity-label');
     if (!label) {
         label = document.createElement('div');
         label.className = 'ai-activity-label';
+        label.textContent = 'Thinking';
         typing.insertBefore(label, typing.firstChild);
     }
-    label.textContent = inferActivityLabel(text);
 }
 
 function toggleMenu() {
