@@ -1,5 +1,5 @@
-{
-  "name": "sonix-backend",
+
+  "name": "sonixai",
   "main": "worker.js",
   "compatibility_date": "2026-01-01",
   "vars": {
@@ -9,7 +9,6 @@
     {
       "binding": "DB",
       "database_name": "sonix-db",
-      "database_id": "PASTE-YOUR-DATABASE-ID-HERE-AFTER-CREATING-IT"
+      "database_id": "94c18b0a-08ba-4c35-b46b-27b742d2b630"
     }
   ]
-}
