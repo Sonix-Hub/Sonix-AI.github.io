@@ -1,7 +1,15 @@
 {
-  "name": "sonix-ai",
+  "name": "sonix-backend",
+  "main": "worker.js",
   "compatibility_date": "2026-01-01",
-  "assets": {
-    "directory": "./"
-  }
+  "vars": {
+    "ALLOWED_ORIGIN": "https://sonix-ai.pages.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sonix-db",
+      "database_id": "PASTE-YOUR-DATABASE-ID-HERE-AFTER-CREATING-IT"
+    }
+  ]
 }
