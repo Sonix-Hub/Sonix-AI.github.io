@@ -1,4 +1,4 @@
-
+{
   "name": "sonixai",
   "main": "worker.js",
   "compatibility_date": "2026-01-01",
@@ -12,3 +12,4 @@
       "database_id": "94c18b0a-08ba-4c35-b46b-27b742d2b630"
     }
   ]
+}
