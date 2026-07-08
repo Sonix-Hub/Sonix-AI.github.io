@@ -177,7 +177,8 @@ async function handleLogin(request, env) {
     if (!ok) return json({ error: 'Invalid email or password.' }, 401, env);
 
     const token = await createSession(env, user.id);
-    return json({ token, user: { id: user.id, email: user.email, name: user.name } }, 200, env);
+    const settings = user.settings_json ? JSON.parse(user.settings_json) : {};
+    return json({ token, user: { id: user.id, email: user.email, name: user.name, twoFA: settings.twoFA || { enabled: false } } }, 200, env);
 }
 
 async function handleGoogleAuth(request, env) {
@@ -207,7 +208,9 @@ async function handleGoogleAuth(request, env) {
     }
 
     const token = await createSession(env, user.id);
-    return json({ token, user: { id: user.id, email: user.email, name: user.name } }, 200, env);
+    const settingsRow = await env.DB.prepare('SELECT settings_json FROM users WHERE id = ?').bind(user.id).first();
+    const settings = settingsRow && settingsRow.settings_json ? JSON.parse(settingsRow.settings_json) : {};
+    return json({ token, user: { id: user.id, email: user.email, name: user.name, twoFA: settings.twoFA || { enabled: false } } }, 200, env);
 }
 
 async function handleResetRequest(request, env) {
@@ -250,27 +253,85 @@ async function handleResetConfirm(request, env) {
     return json({ ok: true }, 200, env);
 }
 
+async function handleMe(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    return json({ user }, 200, env);
+}
+
+async function handleDeleteAccount(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    await env.DB.prepare('DELETE FROM conversations WHERE user_id = ?').bind(user.id).run();
+    await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
+    await env.DB.prepare('DELETE FROM password_resets WHERE user_id = ?').bind(user.id).run();
+    await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
+    return json({ ok: true }, 200, env);
+}
+
 async function handleGetConversations(request, env) {
     const user = await getUserFromRequest(request, env);
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
     const { results } = await env.DB.prepare(
-        'SELECT id, name, messages_json, updated_at FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'
+        'SELECT id, messages_json FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'
     ).bind(user.id).all();
-    const conversations = results.map(r => ({ id: r.id, name: r.name, messages: JSON.parse(r.messages_json), updatedAt: r.updated_at }));
-    return json({ conversations }, 200, env);
+    // messages_json actually stores the FULL session object (id, name, messages,
+    // flags like _favorite/_archived/_deleted, etc) — "messages_json" is just the
+    // column name from the original schema, kept as-is to avoid a migration.
+    const sessions = results.map(r => JSON.parse(r.messages_json));
+    return json({ sessions }, 200, env);
 }
 
 async function handleSaveConversation(request, env) {
     const user = await getUserFromRequest(request, env);
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
-    const { id, name, messages } = await request.json();
-    const convId = id || uuid();
+    const session = await request.json();
+    if (!session.id) return json({ error: 'Missing session id.' }, 400, env);
     const now = Date.now();
     await env.DB.prepare(
         `INSERT INTO conversations (id, user_id, name, messages_json, updated_at) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, messages_json = excluded.messages_json, updated_at = excluded.updated_at`
-    ).bind(convId, user.id, name || 'Untitled', JSON.stringify(messages || []), now).run();
-    return json({ id: convId, updatedAt: now }, 200, env);
+    ).bind(session.id, user.id, session.name || 'Untitled', JSON.stringify(session), now).run();
+    return json({ id: session.id, updatedAt: now }, 200, env);
+}
+
+// Syncs the whole local sessions array in one call — this is what the
+// frontend actually uses day-to-day (simpler than tracking exactly which
+// one session changed after every edit/delete/favorite toggle).
+async function handleBulkSaveConversations(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    const { sessions } = await request.json();
+    if (!Array.isArray(sessions)) return json({ error: 'Expected a sessions array.' }, 400, env);
+    const now = Date.now();
+    const statements = sessions.map(session =>
+        env.DB.prepare(
+            `INSERT INTO conversations (id, user_id, name, messages_json, updated_at) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, messages_json = excluded.messages_json, updated_at = excluded.updated_at`
+        ).bind(session.id, user.id, session.name || 'Untitled', JSON.stringify(session), now)
+    );
+    if (statements.length) await env.DB.batch(statements);
+    return json({ ok: true, count: statements.length }, 200, env);
+}
+
+async function handleGetSettings(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    const row = await env.DB.prepare('SELECT settings_json FROM users WHERE id = ?').bind(user.id).first();
+    const settings = row && row.settings_json ? JSON.parse(row.settings_json) : {};
+    return json({ settings }, 200, env);
+}
+
+async function handleSaveSettings(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    const { settings, name } = await request.json();
+    await env.DB.prepare('UPDATE users SET settings_json = ? WHERE id = ?')
+        .bind(JSON.stringify(settings || {}), user.id).run();
+    if (name && name.trim()) {
+        await env.DB.prepare('UPDATE users SET name = ? WHERE id = ?').bind(name.trim(), user.id).run();
+    }
+    return json({ ok: true }, 200, env);
 }
 
 async function handleDeleteConversation(request, env, convId) {
@@ -297,11 +358,16 @@ export default {
             if (path === '/api/google-auth' && request.method === 'POST') return await handleGoogleAuth(request, env);
             if (path === '/api/reset-request' && request.method === 'POST') return await handleResetRequest(request, env);
             if (path === '/api/reset-confirm' && request.method === 'POST') return await handleResetConfirm(request, env);
+            if (path === '/api/me' && request.method === 'GET') return await handleMe(request, env);
+            if (path === '/api/account' && request.method === 'DELETE') return await handleDeleteAccount(request, env);
             if (path === '/api/conversations' && request.method === 'GET') return await handleGetConversations(request, env);
             if (path === '/api/conversations' && request.method === 'POST') return await handleSaveConversation(request, env);
+            if (path === '/api/conversations/bulk' && request.method === 'POST') return await handleBulkSaveConversations(request, env);
             if (path.startsWith('/api/conversations/') && request.method === 'DELETE') {
                 return await handleDeleteConversation(request, env, path.split('/').pop());
             }
+            if (path === '/api/settings' && request.method === 'GET') return await handleGetSettings(request, env);
+            if (path === '/api/settings' && request.method === 'POST') return await handleSaveSettings(request, env);
             return json({ error: 'Not found' }, 404, env);
         } catch (e) {
             return json({ error: 'Server error: ' + e.message }, 500, env);
