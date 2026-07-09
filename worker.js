@@ -256,6 +256,24 @@ async function handleResetConfirm(request, env) {
     return json({ ok: true }, 200, env);
 }
 
+async function handleChangePassword(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    const { currentPassword, newPassword } = await request.json();
+    if (!currentPassword || !newPassword) return json({ error: 'Missing current or new password.' }, 400, env);
+    if (newPassword.length < 6) return json({ error: 'New password must be 6+ characters.' }, 400, env);
+
+    const row = await env.DB.prepare('SELECT password_hash, password_salt FROM users WHERE id = ?').bind(user.id).first();
+    if (!row || !row.password_hash) return json({ error: 'This account has no password set (it may only use Google Sign-In).' }, 400, env);
+
+    const ok = await verifyPassword(currentPassword, row.password_hash, row.password_salt);
+    if (!ok) return json({ error: 'Current password is incorrect.' }, 401, env);
+
+    const { hash, salt } = await hashPassword(newPassword);
+    await env.DB.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').bind(hash, salt, user.id).run();
+    return json({ ok: true }, 200, env);
+}
+
 async function handleMe(request, env) {
     const user = await getUserFromRequest(request, env);
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
@@ -362,6 +380,7 @@ export default {
             if (path === '/api/reset-request' && request.method === 'POST') return await handleResetRequest(request, env);
             if (path === '/api/reset-confirm' && request.method === 'POST') return await handleResetConfirm(request, env);
             if (path === '/api/me' && request.method === 'GET') return await handleMe(request, env);
+            if (path === '/api/change-password' && request.method === 'POST') return await handleChangePassword(request, env);
             if (path === '/api/account' && request.method === 'DELETE') return await handleDeleteAccount(request, env);
             if (path === '/api/conversations' && request.method === 'GET') return await handleGetConversations(request, env);
             if (path === '/api/conversations' && request.method === 'POST') return await handleSaveConversation(request, env);
