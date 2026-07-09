@@ -19,7 +19,10 @@
  * ================================================================
  */
 
-const FROM_EMAIL = 'SONIX <noreply@yourdomain.com>'; // DEV: change to your verified Resend sender
+const FROM_EMAIL = 'SONIX <onboarding@resend.dev>'; // Works immediately, no domain verification needed —
+// BUT can only deliver to the email address on your own Resend account until you verify a domain.
+// To send to real users, verify a domain at resend.com/domains, then change this to
+// something like 'SONIX <noreply@yourdomain.com>'.
 
 // ---------- Small helpers ----------
 
