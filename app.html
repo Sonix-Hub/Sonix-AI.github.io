@@ -2240,22 +2240,24 @@ function openResetPassword() {
     openModal('reset-pass-modal');
 }
 
-function doResetPassword() {
-    if (isGuest) { showToast('Not available in Guest mode'); return; }
+async function doResetPassword() {
+    if (isGuest) { showToast('Not available without an account'); return; }
     const cur = document.getElementById('reset-current').value;
     const newP = document.getElementById('reset-new').value;
     const conf = document.getElementById('reset-confirm').value;
     const errEl = document.getElementById('reset-err');
     errEl.style.display = 'none';
     if (!cur || !newP || !conf) { errEl.textContent = 'Fill in all fields.'; errEl.style.display = 'block'; return; }
-    if (currentUser.pass !== cur) { errEl.textContent = 'Current password is incorrect.'; errEl.style.display = 'block'; return; }
     if (newP.length < 6) { errEl.textContent = 'New password must be 6+ characters.'; errEl.style.display = 'block'; return; }
     if (newP !== conf) { errEl.textContent = 'New passwords do not match.'; errEl.style.display = 'block'; return; }
-    currentUser.pass = newP;
-    persistUser();
-    saveCurrentUser();
-    switchModal('reset-pass-modal','profile-modal');
-    showToast('Password updated');
+    try {
+        await apiFetch('/api/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: cur, newPassword: newP }) });
+        switchModal('reset-pass-modal','profile-modal');
+        showToast('Password updated');
+    } catch (e) {
+        errEl.textContent = e.message || 'Could not update password — try again.';
+        errEl.style.display = 'block';
+    }
 }
 
 // DELETE ACCOUNT FLOW
