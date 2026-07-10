@@ -1,9 +1,9 @@
 /**
  * SONIX BACKEND — Cloudflare Worker
  * ================================================================
- * Handles: email/password signup+login, Google Sign-In, password
- * reset (via email), and syncing conversations to a real database
- * (D1) instead of only the browser's local storage.
+ * Handles: email/password signup (with email verification code)+login,
+ * Google Sign-In, password reset (via email), and syncing conversations
+ * to a real database (D1) instead of only the browser's local storage.
  *
  * SETUP (see the deployment guide for full step-by-step details):
  *   1. Create a D1 database, run schema.sql against it, bind it to
@@ -23,6 +23,9 @@ const FROM_EMAIL = 'SONIX <onboarding@resend.dev>'; // Works immediately, no dom
 // BUT can only deliver to the email address on your own Resend account until you verify a domain.
 // To send to real users, verify a domain at resend.com/domains, then change this to
 // something like 'SONIX <noreply@yourdomain.com>'.
+
+const CODE_EXPIRY_MS = 10 * 60 * 1000; // verification code valid for 10 minutes
+const MAX_CODE_ATTEMPTS = 5;
 
 // ---------- Small helpers ----------
 
@@ -55,6 +58,29 @@ function bytesToBase64Url(bytes) {
     let bin = '';
     bytes.forEach(b => bin += String.fromCharCode(b));
     return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// ---------- Input validation ----------
+
+// Standard, practical email shape check: something@something.tld
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function isValidEmail(email) {
+    return typeof email === 'string' && email.length <= 254 && EMAIL_RE.test(email);
+}
+
+// 7+ chars, at least 1 uppercase letter, at least 1 special (non-alphanumeric) character
+function passwordError(password) {
+    if (typeof password !== 'string' || password.length < 7) return 'Password must be at least 7 characters.';
+    if (!/[A-Z]/.test(password)) return 'Password must include at least 1 uppercase letter.';
+    if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include at least 1 special character.';
+    return null;
+}
+
+function generateCode() {
+    // 6-digit numeric code, e.g. 048213
+    const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
+    return String(n).padStart(6, '0');
 }
 
 // ---------- Password hashing (PBKDF2 via Web Crypto — no external libs needed) ----------
@@ -154,21 +180,77 @@ async function sendEmail(env, to, subject, html) {
 
 // ---------- Route handlers ----------
 
-async function handleSignup(request, env) {
+// STEP 1 of signup: validate input, email a 6-digit code, stash the
+// pending signup (with password already hashed) until it's confirmed.
+async function handleSignupRequest(request, env) {
     const { email, password, name } = await request.json();
     if (!email || !password) return json({ error: 'Email and password are required.' }, 400, env);
+    if (!isValidEmail(email)) return json({ error: 'Enter a real email address, e.g. example@gmail.com' }, 400, env);
+    const pwErr = passwordError(password);
+    if (pwErr) return json({ error: pwErr }, 400, env);
 
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
     if (existing) return json({ error: 'An account with this email already exists.' }, 409, env);
 
     const { hash, salt } = await hashPassword(password);
+    const code = generateCode();
+    const now = Date.now();
+
+    await env.DB.prepare(
+        `INSERT INTO email_verifications (email, code, name, password_hash, password_salt, attempts, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+         ON CONFLICT(email) DO UPDATE SET code = excluded.code, name = excluded.name,
+            password_hash = excluded.password_hash, password_salt = excluded.password_salt,
+            attempts = 0, created_at = excluded.created_at, expires_at = excluded.expires_at`
+    ).bind(email, code, name || email.split('@')[0], hash, salt, now, now + CODE_EXPIRY_MS).run();
+
+    try {
+        await sendEmail(env, email, 'Your SONIX verification code',
+            `<p>Your SONIX verification code is:</p>` +
+            `<p style="font-size:28px;font-weight:800;letter-spacing:4px;">${code}</p>` +
+            `<p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`
+        );
+    } catch (e) {
+        return json({ error: 'Could not send verification email: ' + e.message }, 500, env);
+    }
+
+    return json({ ok: true }, 200, env);
+}
+
+// STEP 2 of signup: check the code, then actually create the account.
+async function handleSignupVerify(request, env) {
+    const { email, code } = await request.json();
+    if (!email || !code) return json({ error: 'Missing email or code.' }, 400, env);
+
+    const row = await env.DB.prepare('SELECT * FROM email_verifications WHERE email = ?').bind(email).first();
+    if (!row) return json({ error: 'No pending verification for this email — request a new code.' }, 400, env);
+    if (row.expires_at < Date.now()) {
+        await env.DB.prepare('DELETE FROM email_verifications WHERE email = ?').bind(email).run();
+        return json({ error: 'That code expired — request a new one.' }, 400, env);
+    }
+    if (row.attempts >= MAX_CODE_ATTEMPTS) {
+        await env.DB.prepare('DELETE FROM email_verifications WHERE email = ?').bind(email).run();
+        return json({ error: 'Too many incorrect attempts — request a new code.' }, 429, env);
+    }
+    if (row.code !== String(code).trim()) {
+        await env.DB.prepare('UPDATE email_verifications SET attempts = attempts + 1 WHERE email = ?').bind(email).run();
+        return json({ error: 'Incorrect code.' }, 400, env);
+    }
+
+    const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+    if (existing) {
+        await env.DB.prepare('DELETE FROM email_verifications WHERE email = ?').bind(email).run();
+        return json({ error: 'An account with this email already exists.' }, 409, env);
+    }
+
     const id = uuid();
     await env.DB.prepare(
         'INSERT INTO users (id, email, password_hash, password_salt, name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(id, email, hash, salt, name || email.split('@')[0], Date.now()).run();
+    ).bind(id, email, row.password_hash, row.password_salt, row.name, Date.now()).run();
+    await env.DB.prepare('DELETE FROM email_verifications WHERE email = ?').bind(email).run();
 
     const token = await createSession(env, id);
-    return json({ token, user: { id, email, name: name || email.split('@')[0] } }, 200, env);
+    return json({ token, user: { id, email, name: row.name } }, 200, env);
 }
 
 async function handleLogin(request, env) {
@@ -244,6 +326,8 @@ async function handleResetRequest(request, env) {
 async function handleResetConfirm(request, env) {
     const { token, newPassword } = await request.json();
     if (!token || !newPassword) return json({ error: 'Missing token or new password.' }, 400, env);
+    const pwErr = passwordError(newPassword);
+    if (pwErr) return json({ error: pwErr }, 400, env);
 
     const row = await env.DB.prepare('SELECT * FROM password_resets WHERE token = ?').bind(token).first();
     if (!row || row.expires_at < Date.now()) return json({ error: 'Reset link is invalid or expired.' }, 400, env);
@@ -261,7 +345,8 @@ async function handleChangePassword(request, env) {
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
     const { currentPassword, newPassword } = await request.json();
     if (!currentPassword || !newPassword) return json({ error: 'Missing current or new password.' }, 400, env);
-    if (newPassword.length < 6) return json({ error: 'New password must be 6+ characters.' }, 400, env);
+    const pwErr = passwordError(newPassword);
+    if (pwErr) return json({ error: pwErr }, 400, env);
 
     const row = await env.DB.prepare('SELECT password_hash, password_salt FROM users WHERE id = ?').bind(user.id).first();
     if (!row || !row.password_hash) return json({ error: 'This account has no password set (it may only use Google Sign-In).' }, 400, env);
@@ -296,9 +381,6 @@ async function handleGetConversations(request, env) {
     const { results } = await env.DB.prepare(
         'SELECT id, messages_json FROM conversations WHERE user_id = ? ORDER BY updated_at DESC'
     ).bind(user.id).all();
-    // messages_json actually stores the FULL session object (id, name, messages,
-    // flags like _favorite/_archived/_deleted, etc) — "messages_json" is just the
-    // column name from the original schema, kept as-is to avoid a migration.
     const sessions = results.map(r => JSON.parse(r.messages_json));
     return json({ sessions }, 200, env);
 }
@@ -316,9 +398,6 @@ async function handleSaveConversation(request, env) {
     return json({ id: session.id, updatedAt: now }, 200, env);
 }
 
-// Syncs the whole local sessions array in one call — this is what the
-// frontend actually uses day-to-day (simpler than tracking exactly which
-// one session changed after every edit/delete/favorite toggle).
 async function handleBulkSaveConversations(request, env) {
     const user = await getUserFromRequest(request, env);
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
@@ -374,7 +453,8 @@ export default {
         }
 
         try {
-            if (path === '/api/signup' && request.method === 'POST') return await handleSignup(request, env);
+            if (path === '/api/signup-request' && request.method === 'POST') return await handleSignupRequest(request, env);
+            if (path === '/api/signup-verify' && request.method === 'POST') return await handleSignupVerify(request, env);
             if (path === '/api/login' && request.method === 'POST') return await handleLogin(request, env);
             if (path === '/api/google-auth' && request.method === 'POST') return await handleGoogleAuth(request, env);
             if (path === '/api/reset-request' && request.method === 'POST') return await handleResetRequest(request, env);
