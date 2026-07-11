@@ -3,7 +3,8 @@
   "main": "worker.js",
   "compatibility_date": "2026-01-01",
   "vars": {
-    "ALLOWED_ORIGIN": "https://sonix-ai.pages.dev"
+    "ALLOWED_ORIGIN": "https://sonix-ai.pages.dev",
+    "GOOGLE_CLIENT_ID": "646499820139-6o4cgp4179mbqns9fequ9ik9qnv3amo9.apps.googleusercontent.com"
   },
   "d1_databases": [
     {
