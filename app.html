@@ -559,6 +559,7 @@
     <div class="auth-box">
         <div id="auth-err" class="auth-err"></div>
         <input class="auth-input" id="auth-nickname" type="text" placeholder="Nickname (optional)">
+        <input class="auth-input" id="auth-email" type="email" placeholder="Email address" autocomplete="email" inputmode="email" name="email">
         <button class="auth-btn" id="auth-submit" onclick="handleEmailButton()">Continue with Email</button>
         <div style="display:flex;align-items:center;gap:10px;margin:14px 0;">
             <div style="flex:1;height:1px;background:#222;"></div>
@@ -1368,14 +1369,12 @@ async function handleEmailButton() {
     setTimeout(() => { _authLock = false; }, 1500);
 
     const nickname = document.getElementById('auth-nickname').value.trim();
-    const email = window.prompt('Enter your email address:');
-    if (email === null) return;
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) { showAuthErr('Enter your email.'); return; }
-    if (!isValidEmail(trimmedEmail)) { showAuthErr('Enter a real email address, e.g. example@gmail.com'); return; }
+    const email = document.getElementById('auth-email').value.trim();
+    if (!email) { showAuthErr('Enter your email.'); return; }
+    if (!isValidEmail(email)) { showAuthErr('Enter a real email address, e.g. example@gmail.com'); return; }
 
     try {
-        const data = await requestAndVerifyEmailCode(trimmedEmail, nickname);
+        const data = await requestAndVerifyEmailCode(email, nickname);
         if (!data) { showAuthErr('Sign-in cancelled.'); return; }
 
         sessionToken = data.token;
@@ -1950,6 +1949,7 @@ function logout() {
     document.getElementById('chat-window').innerHTML = '<div class="welcome-hero" id="welcome-msg">Hello, SONIX ready to help you</div><div class="typing-bubble" id="typing-indicator"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
     attachWelcomeQuickActions();
     document.getElementById('auth-nickname').value = '';
+    document.getElementById('auth-email').value = '';
     const acctActions = document.getElementById('settings-account-actions');
     if (acctActions) acctActions.style.display = 'none';
     const secRow = document.getElementById('security-row');
