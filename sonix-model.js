@@ -1174,11 +1174,14 @@ const LANG_ALIASES = {
   rust:"rust",
   ruby:"ruby",
   php:"php",
+  kotlin:"kotlin", kt:"kotlin",
+  swift:"swift",
 };
 
 const LANG_NAMES = {
   python:"Python", javascript:"JavaScript", typescript:"TypeScript", java:"Java",
   cpp:"C++", csharp:"C#", go:"Go", rust:"Rust", ruby:"Ruby", php:"PHP",
+  kotlin:"Kotlin", swift:"Swift",
 };
 
 function detectCodeLanguage(text) {
@@ -1195,7 +1198,7 @@ const CODE_TASK_TITLES = {
   hello_world:"Hello World", fizzbuzz:"FizzBuzz", factorial:"Factorial (recursive)",
   fibonacci:"Fibonacci sequence", reverse_string:"Reverse a string", palindrome:"Palindrome check",
   bubble_sort:"Bubble sort", binary_search:"Binary search", prime_check:"Prime number check",
-  swap_variables:"Swap two variables",
+  swap_variables:"Swap two variables", quicksort:"Quicksort", anagram_check:"Anagram check",
 };
 
 const CODE_TASK_PATTERNS = [
@@ -1209,6 +1212,8 @@ const CODE_TASK_PATTERNS = [
   {key:"binary_search",  re:/binary\s*search/i},
   {key:"prime_check",    re:/(check|is|test)\b.*\bprime|prime\s+(number\s+)?check/i},
   {key:"swap_variables", re:/swap\s+(two\s+)?(variables?|values?)/i},
+  {key:"quicksort",      re:/quick\s*sort/i},
+  {key:"anagram_check",  re:/anagram/i},
 ];
 
 function detectCodeTask(text) {
@@ -1228,6 +1233,8 @@ const CODE_SNIPPETS = {
     rust: `fn main() {\n    println!("Hello, World!");\n}`,
     ruby: `puts "Hello, World!"`,
     php: `<?php\necho "Hello, World!";`,
+    kotlin: `fun main() {\n    println("Hello, World!")\n}`,
+    swift: `print("Hello, World!")`,
   },
   fizzbuzz: {
     python: `for i in range(1, 21):\n    if i % 15 == 0: print("FizzBuzz")\n    elif i % 3 == 0: print("Fizz")\n    elif i % 5 == 0: print("Buzz")\n    else: print(i)`,
@@ -1240,6 +1247,8 @@ const CODE_SNIPPETS = {
     rust: `fn main() {\n    for i in 1..=20 {\n        if i % 15 == 0 { println!("FizzBuzz"); }\n        else if i % 3 == 0 { println!("Fizz"); }\n        else if i % 5 == 0 { println!("Buzz"); }\n        else { println!("{}", i); }\n    }\n}`,
     ruby: `(1..20).each do |i|\n  if i % 15 == 0 then puts "FizzBuzz"\n  elsif i % 3 == 0 then puts "Fizz"\n  elsif i % 5 == 0 then puts "Buzz"\n  else puts i\n  end\nend`,
     php: `<?php\nfor ($i = 1; $i <= 20; $i++) {\n    if ($i % 15 == 0) echo "FizzBuzz\\n";\n    elseif ($i % 3 == 0) echo "Fizz\\n";\n    elseif ($i % 5 == 0) echo "Buzz\\n";\n    else echo "$i\\n";\n}`,
+    kotlin: `fun main() {\n    for (i in 1..20) {\n        when {\n            i % 15 == 0 -> println("FizzBuzz")\n            i % 3 == 0 -> println("Fizz")\n            i % 5 == 0 -> println("Buzz")\n            else -> println(i)\n        }\n    }\n}`,
+    swift: `for i in 1...20 {\n    if i % 15 == 0 { print("FizzBuzz") }\n    else if i % 3 == 0 { print("Fizz") }\n    else if i % 5 == 0 { print("Buzz") }\n    else { print(i) }\n}`,
   },
   factorial: {
     python: `def factorial(n):\n    return 1 if n <= 1 else n * factorial(n - 1)\n\nprint(factorial(5))`,
@@ -1252,6 +1261,8 @@ const CODE_SNIPPETS = {
     rust: `fn factorial(n: u64) -> u64 {\n    if n <= 1 { 1 } else { n * factorial(n - 1) }\n}\nfn main() {\n    println!("{}", factorial(5));\n}`,
     ruby: `def factorial(n)\n  n <= 1 ? 1 : n * factorial(n - 1)\nend\n\nputs factorial(5)`,
     php: `<?php\nfunction factorial($n) {\n    return $n <= 1 ? 1 : $n * factorial($n - 1);\n}\necho factorial(5);`,
+    kotlin: `fun factorial(n: Int): Long = if (n <= 1) 1 else n * factorial(n - 1)\n\nfun main() {\n    println(factorial(5))\n}`,
+    swift: `func factorial(_ n: Int) -> Int {\n    return n <= 1 ? 1 : n * factorial(n - 1)\n}\nprint(factorial(5))`,
   },
   fibonacci: {
     python: `def fibonacci(n):\n    a, b = 0, 1\n    result = []\n    for _ in range(n):\n        result.append(a)\n        a, b = b, a + b\n    return result\n\nprint(fibonacci(10))`,
@@ -1264,6 +1275,8 @@ const CODE_SNIPPETS = {
     rust: `fn main() {\n    let (mut a, mut b) = (0u64, 1u64);\n    for _ in 0..10 {\n        print!("{} ", a);\n        let next = a + b;\n        a = b;\n        b = next;\n    }\n}`,
     ruby: `a, b = 0, 1\n10.times do\n  print "#{a} "\n  a, b = b, a + b\nend`,
     php: `<?php\n$a = 0; $b = 1;\nfor ($i = 0; $i < 10; $i++) {\n    echo $a . " ";\n    [$a, $b] = [$b, $a + $b];\n}`,
+    kotlin: `fun main() {\n    var a = 0; var b = 1\n    repeat(10) {\n        print("$a ")\n        val next = a + b\n        a = b; b = next\n    }\n}`,
+    swift: `var a = 0, b = 1\nfor _ in 0..<10 {\n    print(a, terminator: " ")\n    let next = a + b\n    a = b; b = next\n}`,
   },
   reverse_string: {
     python: `print("hello"[::-1])`,
@@ -1276,6 +1289,8 @@ const CODE_SNIPPETS = {
     rust: `fn main() {\n    let s: String = "hello".chars().rev().collect();\n    println!("{}", s);\n}`,
     ruby: `puts "hello".reverse`,
     php: `<?php\necho strrev("hello");`,
+    kotlin: `fun main() {\n    println("hello".reversed())\n}`,
+    swift: `print(String("hello".reversed()))`,
   },
   palindrome: {
     python: `def is_palindrome(s):\n    s = s.lower().replace(" ", "")\n    return s == s[::-1]\n\nprint(is_palindrome("racecar"))`,
@@ -1288,6 +1303,8 @@ const CODE_SNIPPETS = {
     rust: `fn is_palindrome(s: &str) -> bool {\n    let chars: Vec<char> = s.chars().collect();\n    let reversed: Vec<char> = chars.iter().rev().cloned().collect();\n    chars == reversed\n}\nfn main() {\n    println!("{}", is_palindrome("racecar"));\n}`,
     ruby: `def palindrome?(s)\n  s == s.reverse\nend\n\nputs palindrome?("racecar")`,
     php: `<?php\nfunction isPalindrome($s) {\n    return $s === strrev($s);\n}\nvar_dump(isPalindrome("racecar"));`,
+    kotlin: `fun isPalindrome(s: String): Boolean {\n    val clean = s.lowercase().replace(" ", "")\n    return clean == clean.reversed()\n}\n\nfun main() {\n    println(isPalindrome("racecar"))\n}`,
+    swift: `func isPalindrome(_ s: String) -> Bool {\n    let clean = s.lowercased().replacingOccurrences(of: " ", with: "")\n    return clean == String(clean.reversed())\n}\nprint(isPalindrome("racecar"))`,
   },
   bubble_sort: {
     python: `def bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n - i - 1):\n            if arr[j] > arr[j + 1]:\n                arr[j], arr[j + 1] = arr[j + 1], arr[j]\n    return arr\n\nprint(bubble_sort([5, 2, 9, 1, 5, 6]))`,
@@ -1300,6 +1317,8 @@ const CODE_SNIPPETS = {
     rust: `fn bubble_sort(arr: &mut Vec<i32>) {\n    let n = arr.len();\n    for i in 0..n {\n        for j in 0..n - i - 1 {\n            if arr[j] > arr[j + 1] { arr.swap(j, j + 1); }\n        }\n    }\n}\nfn main() {\n    let mut arr = vec![5, 2, 9, 1, 5, 6];\n    bubble_sort(&mut arr);\n    println!("{:?}", arr);\n}`,
     ruby: `def bubble_sort(arr)\n  n = arr.length\n  n.times do |i|\n    (0...n - i - 1).each do |j|\n      arr[j], arr[j + 1] = arr[j + 1], arr[j] if arr[j] > arr[j + 1]\n    end\n  end\n  arr\nend\n\np bubble_sort([5, 2, 9, 1, 5, 6])`,
     php: `<?php\nfunction bubbleSort($arr) {\n    $n = count($arr);\n    for ($i = 0; $i < $n; $i++)\n        for ($j = 0; $j < $n - $i - 1; $j++)\n            if ($arr[$j] > $arr[$j + 1]) {\n                [$arr[$j], $arr[$j + 1]] = [$arr[$j + 1], $arr[$j]];\n            }\n    return $arr;\n}\nprint_r(bubbleSort([5, 2, 9, 1, 5, 6]));`,
+    kotlin: `fun bubbleSort(arr: IntArray): IntArray {\n    val n = arr.size\n    for (i in 0 until n) {\n        for (j in 0 until n - i - 1) {\n            if (arr[j] > arr[j + 1]) {\n                val temp = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = temp\n            }\n        }\n    }\n    return arr\n}\n\nfun main() {\n    println(bubbleSort(intArrayOf(5, 2, 9, 1, 5, 6)).joinToString())\n}`,
+    swift: `func bubbleSort(_ arr: inout [Int]) {\n    let n = arr.count\n    for i in 0..<n {\n        for j in 0..<(n - i - 1) {\n            if arr[j] > arr[j + 1] { arr.swapAt(j, j + 1) }\n        }\n    }\n}\nvar arr = [5, 2, 9, 1, 5, 6]\nbubbleSort(&arr)\nprint(arr)`,
   },
   binary_search: {
     python: `def binary_search(arr, target):\n    lo, hi = 0, len(arr) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if arr[mid] == target: return mid\n        elif arr[mid] < target: lo = mid + 1\n        else: hi = mid - 1\n    return -1\n\nprint(binary_search([1, 3, 5, 7, 9, 11], 7))`,
@@ -1312,6 +1331,8 @@ const CODE_SNIPPETS = {
     rust: `fn binary_search(arr: &[i32], target: i32) -> i32 {\n    let (mut lo, mut hi) = (0i32, arr.len() as i32 - 1);\n    while lo <= hi {\n        let mid = (lo + hi) / 2;\n        if arr[mid as usize] == target { return mid; }\n        else if arr[mid as usize] < target { lo = mid + 1; }\n        else { hi = mid - 1; }\n    }\n    -1\n}\nfn main() {\n    println!("{}", binary_search(&[1, 3, 5, 7, 9, 11], 7));\n}`,
     ruby: `def binary_search(arr, target)\n  lo, hi = 0, arr.length - 1\n  while lo <= hi\n    mid = (lo + hi) / 2\n    return mid if arr[mid] == target\n    arr[mid] < target ? lo = mid + 1 : hi = mid - 1\n  end\n  -1\nend\n\nputs binary_search([1, 3, 5, 7, 9, 11], 7)`,
     php: `<?php\nfunction binarySearch($arr, $target) {\n    $lo = 0; $hi = count($arr) - 1;\n    while ($lo <= $hi) {\n        $mid = intdiv($lo + $hi, 2);\n        if ($arr[$mid] == $target) return $mid;\n        elseif ($arr[$mid] < $target) $lo = $mid + 1;\n        else $hi = $mid - 1;\n    }\n    return -1;\n}\necho binarySearch([1, 3, 5, 7, 9, 11], 7);`,
+    kotlin: `fun binarySearch(arr: IntArray, target: Int): Int {\n    var lo = 0; var hi = arr.size - 1\n    while (lo <= hi) {\n        val mid = (lo + hi) / 2\n        when {\n            arr[mid] == target -> return mid\n            arr[mid] < target -> lo = mid + 1\n            else -> hi = mid - 1\n        }\n    }\n    return -1\n}\n\nfun main() {\n    println(binarySearch(intArrayOf(1, 3, 5, 7, 9, 11), 7))\n}`,
+    swift: `func binarySearch(_ arr: [Int], _ target: Int) -> Int {\n    var lo = 0, hi = arr.count - 1\n    while lo <= hi {\n        let mid = (lo + hi) / 2\n        if arr[mid] == target { return mid }\n        else if arr[mid] < target { lo = mid + 1 }\n        else { hi = mid - 1 }\n    }\n    return -1\n}\nprint(binarySearch([1, 3, 5, 7, 9, 11], 7))`,
   },
   prime_check: {
     python: `def is_prime(n):\n    if n < 2: return False\n    for i in range(2, int(n ** 0.5) + 1):\n        if n % i == 0: return False\n    return True\n\nprint(is_prime(29))`,
@@ -1324,6 +1345,8 @@ const CODE_SNIPPETS = {
     rust: `fn is_prime(n: u32) -> bool {\n    if n < 2 { return false; }\n    let mut i = 2;\n    while i * i <= n {\n        if n % i == 0 { return false; }\n        i += 1;\n    }\n    true\n}\nfn main() {\n    println!("{}", is_prime(29));\n}`,
     ruby: `def prime?(n)\n  return false if n < 2\n  (2..Math.sqrt(n)).none? { |i| n % i == 0 }\nend\n\nputs prime?(29)`,
     php: `<?php\nfunction isPrime($n) {\n    if ($n < 2) return false;\n    for ($i = 2; $i <= sqrt($n); $i++) {\n        if ($n % $i == 0) return false;\n    }\n    return true;\n}\nvar_dump(isPrime(29));`,
+    kotlin: `fun isPrime(n: Int): Boolean {\n    if (n < 2) return false\n    for (i in 2..Math.sqrt(n.toDouble()).toInt()) {\n        if (n % i == 0) return false\n    }\n    return true\n}\n\nfun main() {\n    println(isPrime(29))\n}`,
+    swift: `func isPrime(_ n: Int) -> Bool {\n    if n < 2 { return false }\n    var i = 2\n    while i * i <= n {\n        if n % i == 0 { return false }\n        i += 1\n    }\n    return true\n}\nprint(isPrime(29))`,
   },
   swap_variables: {
     python: `a, b = 1, 2\na, b = b, a\nprint(a, b)`,
@@ -1336,6 +1359,36 @@ const CODE_SNIPPETS = {
     rust: `let (mut a, mut b) = (1, 2);\nstd::mem::swap(&mut a, &mut b);\nprintln!("{} {}", a, b);`,
     ruby: `a, b = 1, 2\na, b = b, a\nputs "#{a} #{b}"`,
     php: `$a = 1; $b = 2;\n[$a, $b] = [$b, $a];\necho "$a $b";`,
+    kotlin: `fun main() {\n    var a = 1; var b = 2\n    val temp = a; a = b; b = temp\n    println("$a $b")\n}`,
+    swift: `var a = 1, b = 2\n(a, b) = (b, a)\nprint(a, b)`,
+  },
+  quicksort: {
+    python: `def quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    mid = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quicksort(left) + mid + quicksort(right)\n\nprint(quicksort([5, 2, 9, 1, 5, 6]))`,
+    javascript: `function quicksort(arr) {\n  if (arr.length <= 1) return arr;\n  const pivot = arr[Math.floor(arr.length / 2)];\n  const left = arr.filter(x => x < pivot);\n  const mid = arr.filter(x => x === pivot);\n  const right = arr.filter(x => x > pivot);\n  return [...quicksort(left), ...mid, ...quicksort(right)];\n}\nconsole.log(quicksort([5, 2, 9, 1, 5, 6]));`,
+    typescript: `function quicksort(arr: number[]): number[] {\n  if (arr.length <= 1) return arr;\n  const pivot = arr[Math.floor(arr.length / 2)];\n  const left = arr.filter(x => x < pivot);\n  const mid = arr.filter(x => x === pivot);\n  const right = arr.filter(x => x > pivot);\n  return [...quicksort(left), ...mid, ...quicksort(right)];\n}\nconsole.log(quicksort([5, 2, 9, 1, 5, 6]));`,
+    java: `import java.util.*;\npublic class QuickSort {\n    static void quicksort(int[] arr, int lo, int hi) {\n        if (lo >= hi) return;\n        int pivot = arr[hi], i = lo - 1;\n        for (int j = lo; j < hi; j++) {\n            if (arr[j] < pivot) {\n                i++;\n                int t = arr[i]; arr[i] = arr[j]; arr[j] = t;\n            }\n        }\n        int t = arr[i + 1]; arr[i + 1] = arr[hi]; arr[hi] = t;\n        quicksort(arr, lo, i);\n        quicksort(arr, i + 2, hi);\n    }\n    public static void main(String[] args) {\n        int[] arr = {5, 2, 9, 1, 5, 6};\n        quicksort(arr, 0, arr.length - 1);\n        System.out.println(Arrays.toString(arr));\n    }\n}`,
+    cpp: `#include <iostream>\n#include <vector>\nvoid quicksort(std::vector<int>& arr, int lo, int hi) {\n    if (lo >= hi) return;\n    int pivot = arr[hi], i = lo - 1;\n    for (int j = lo; j < hi; j++) {\n        if (arr[j] < pivot) std::swap(arr[++i], arr[j]);\n    }\n    std::swap(arr[i + 1], arr[hi]);\n    quicksort(arr, lo, i);\n    quicksort(arr, i + 2, hi);\n}\nint main() {\n    std::vector<int> arr = {5, 2, 9, 1, 5, 6};\n    quicksort(arr, 0, arr.size() - 1);\n    for (int x : arr) std::cout << x << " ";\n    return 0;\n}`,
+    csharp: `using System;\nclass Program {\n    static void Quicksort(int[] arr, int lo, int hi) {\n        if (lo >= hi) return;\n        int pivot = arr[hi], i = lo - 1;\n        for (int j = lo; j < hi; j++) {\n            if (arr[j] < pivot) { i++; (arr[i], arr[j]) = (arr[j], arr[i]); }\n        }\n        (arr[i + 1], arr[hi]) = (arr[hi], arr[i + 1]);\n        Quicksort(arr, lo, i);\n        Quicksort(arr, i + 2, hi);\n    }\n    static void Main() {\n        int[] arr = {5, 2, 9, 1, 5, 6};\n        Quicksort(arr, 0, arr.Length - 1);\n        Console.WriteLine(string.Join(", ", arr));\n    }\n}`,
+    go: `package main\nimport "fmt"\nfunc quicksort(arr []int, lo, hi int) {\n    if lo >= hi {\n        return\n    }\n    pivot := arr[hi]\n    i := lo - 1\n    for j := lo; j < hi; j++ {\n        if arr[j] < pivot {\n            i++\n            arr[i], arr[j] = arr[j], arr[i]\n        }\n    }\n    arr[i+1], arr[hi] = arr[hi], arr[i+1]\n    quicksort(arr, lo, i)\n    quicksort(arr, i+2, hi)\n}\nfunc main() {\n    arr := []int{5, 2, 9, 1, 5, 6}\n    quicksort(arr, 0, len(arr)-1)\n    fmt.Println(arr)\n}`,
+    rust: `fn quicksort(arr: &mut Vec<i32>, lo: isize, hi: isize) {\n    if lo >= hi { return; }\n    let pivot = arr[hi as usize];\n    let mut i = lo - 1;\n    for j in lo..hi {\n        if arr[j as usize] < pivot {\n            i += 1;\n            arr.swap(i as usize, j as usize);\n        }\n    }\n    arr.swap((i + 1) as usize, hi as usize);\n    quicksort(arr, lo, i);\n    quicksort(arr, i + 2, hi);\n}\nfn main() {\n    let mut arr = vec![5, 2, 9, 1, 5, 6];\n    let hi = arr.len() as isize - 1;\n    quicksort(&mut arr, 0, hi);\n    println!("{:?}", arr);\n}`,
+    ruby: `def quicksort(arr)\n  return arr if arr.length <= 1\n  pivot = arr[arr.length / 2]\n  left = arr.select { |x| x < pivot }\n  mid = arr.select { |x| x == pivot }\n  right = arr.select { |x| x > pivot }\n  quicksort(left) + mid + quicksort(right)\nend\n\np quicksort([5, 2, 9, 1, 5, 6])`,
+    php: `<?php\nfunction quicksort($arr) {\n    if (count($arr) <= 1) return $arr;\n    $pivot = $arr[intdiv(count($arr), 2)];\n    $left = array_filter($arr, fn($x) => $x < $pivot);\n    $mid = array_filter($arr, fn($x) => $x == $pivot);\n    $right = array_filter($arr, fn($x) => $x > $pivot);\n    return array_merge(quicksort($left), $mid, quicksort($right));\n}\nprint_r(quicksort([5, 2, 9, 1, 5, 6]));`,
+    kotlin: `fun quicksort(arr: List<Int>): List<Int> {\n    if (arr.size <= 1) return arr\n    val pivot = arr[arr.size / 2]\n    val left = arr.filter { it < pivot }\n    val mid = arr.filter { it == pivot }\n    val right = arr.filter { it > pivot }\n    return quicksort(left) + mid + quicksort(right)\n}\n\nfun main() {\n    println(quicksort(listOf(5, 2, 9, 1, 5, 6)))\n}`,
+    swift: `func quicksort(_ arr: [Int]) -> [Int] {\n    if arr.count <= 1 { return arr }\n    let pivot = arr[arr.count / 2]\n    let left = arr.filter { $0 < pivot }\n    let mid = arr.filter { $0 == pivot }\n    let right = arr.filter { $0 > pivot }\n    return quicksort(left) + mid + quicksort(right)\n}\nprint(quicksort([5, 2, 9, 1, 5, 6]))`,
+  },
+  anagram_check: {
+    python: `def is_anagram(a, b):\n    return sorted(a.replace(" ", "").lower()) == sorted(b.replace(" ", "").lower())\n\nprint(is_anagram("listen", "silent"))`,
+    javascript: `function isAnagram(a, b) {\n  const norm = s => s.toLowerCase().replace(/\\s/g, "").split("").sort().join("");\n  return norm(a) === norm(b);\n}\nconsole.log(isAnagram("listen", "silent"));`,
+    typescript: `function isAnagram(a: string, b: string): boolean {\n  const norm = (s: string) => s.toLowerCase().replace(/\\s/g, "").split("").sort().join("");\n  return norm(a) === norm(b);\n}\nconsole.log(isAnagram("listen", "silent"));`,
+    java: `import java.util.*;\npublic class Anagram {\n    static boolean isAnagram(String a, String b) {\n        char[] ca = a.toLowerCase().replace(" ", "").toCharArray();\n        char[] cb = b.toLowerCase().replace(" ", "").toCharArray();\n        Arrays.sort(ca); Arrays.sort(cb);\n        return Arrays.equals(ca, cb);\n    }\n    public static void main(String[] args) {\n        System.out.println(isAnagram("listen", "silent"));\n    }\n}`,
+    cpp: `#include <iostream>\n#include <algorithm>\n#include <string>\nbool isAnagram(std::string a, std::string b) {\n    std::sort(a.begin(), a.end());\n    std::sort(b.begin(), b.end());\n    return a == b;\n}\nint main() {\n    std::cout << std::boolalpha << isAnagram("listen", "silent") << std::endl;\n    return 0;\n}`,
+    csharp: `using System;\nusing System.Linq;\nclass Program {\n    static bool IsAnagram(string a, string b) =>\n        string.Concat(a.ToLower().OrderBy(c => c)) == string.Concat(b.ToLower().OrderBy(c => c));\n    static void Main() {\n        Console.WriteLine(IsAnagram("listen", "silent"));\n    }\n}`,
+    go: `package main\nimport (\n    "fmt"\n    "sort"\n    "strings"\n)\nfunc isAnagram(a, b string) bool {\n    sa := strings.Split(strings.ToLower(a), "")\n    sb := strings.Split(strings.ToLower(b), "")\n    sort.Strings(sa)\n    sort.Strings(sb)\n    return strings.Join(sa, "") == strings.Join(sb, "")\n}\nfunc main() {\n    fmt.Println(isAnagram("listen", "silent"))\n}`,
+    rust: `fn is_anagram(a: &str, b: &str) -> bool {\n    let mut ca: Vec<char> = a.to_lowercase().chars().collect();\n    let mut cb: Vec<char> = b.to_lowercase().chars().collect();\n    ca.sort();\n    cb.sort();\n    ca == cb\n}\nfn main() {\n    println!("{}", is_anagram("listen", "silent"));\n}`,
+    ruby: `def anagram?(a, b)\n  a.downcase.chars.sort == b.downcase.chars.sort\nend\n\nputs anagram?("listen", "silent")`,
+    php: `<?php\nfunction isAnagram($a, $b) {\n    $a = str_split(strtolower($a)); sort($a);\n    $b = str_split(strtolower($b)); sort($b);\n    return $a === $b;\n}\nvar_dump(isAnagram("listen", "silent"));`,
+    kotlin: `fun isAnagram(a: String, b: String): Boolean {\n    return a.lowercase().toList().sorted() == b.lowercase().toList().sorted()\n}\n\nfun main() {\n    println(isAnagram("listen", "silent"))\n}`,
+    swift: `func isAnagram(_ a: String, _ b: String) -> Bool {\n    return a.lowercased().sorted() == b.lowercased().sorted()\n}\nprint(isAnagram("listen", "silent"))`,
   },
 };
 
@@ -1361,6 +1414,13 @@ const CODING_CONCEPTS = {
   "database": "A **database** stores structured data so it can be reliably saved, queried, and updated. SQL databases (like PostgreSQL) use tables and rows; NoSQL databases (like MongoDB) use flexible documents.",
   "compiler": "A **compiler** translates human-written source code into a form a computer can run directly (machine code or bytecode), usually catching type and syntax errors before the program ever runs.",
   "git": "**Git** is a version control system that tracks changes to your code over time, letting you save checkpoints (commits), branch off to try things safely, and merge work back together.",
+  "hashmap": "A **hashmap** (or hash table / dictionary) stores key-value pairs and gives near-instant lookup, insert, and delete by hashing the key to find its slot — much faster than scanning a list.",
+  "stack": "A **stack** is a last-in-first-out (LIFO) data structure — the last item you push on is the first one you pop off. Used for undo history, function call tracking, and expression parsing.",
+  "queue": "A **queue** is a first-in-first-out (FIFO) data structure — items leave in the same order they arrived, like a line at a store. Common for task scheduling and breadth-first search.",
+  "big o": "**Big O notation** describes how an algorithm's runtime or memory use grows as input size increases — O(1) is constant, O(n) is linear, O(n²) is quadratic, O(log n) is logarithmic (very efficient).",
+  "closure": "A **closure** is a function that remembers the variables from the scope it was created in, even after that outer function has finished running. It's how you get private state without a class.",
+  "null": "**Null** (or nil/None depending on the language) represents the deliberate absence of a value. It's different from an empty string or zero — it means 'nothing is here.'",
+  "regex": "A **regex** (regular expression) is a pattern language for matching, searching, or replacing text — e.g. `\\d+` matches one or more digits. Nearly every language has built-in regex support.",
 };
 
 function extractCodeConcept(text) {
@@ -1458,8 +1518,8 @@ const INTENTS = [
   {pattern:/\b(etymology|word origin|origin of the word|history of the word)\b/i,       type:"etymology"},
   {pattern:/\b(idiom|phrase meaning|expression meaning)\b/i,                            type:"idiom"},
   {pattern:/\b(acronym|stands for|what does .+ stand for|abbreviation)\b/i,             type:"acronym"},
-  {pattern:/\b(write (a |an )?(code|program|script|function)|code (for|to)|coding|snippet for|algorithm for|in (python|javascript|typescript|java|c\+\+|c#|go|golang|rust|ruby|php)\b)/i, type:"code"},
-  {pattern:/\b(fizzbuzz|factorial|fibonacci|bubble sort|binary search)\b/i,                type:"code"},
+  {pattern:/\b(write (a |an )?(code|program|script|function)|code (for|to)|coding|snippet for|algorithm for|in (python|javascript|typescript|java|c\+\+|c#|go|golang|rust|ruby|php|kotlin|swift)\b)/i, type:"code"},
+  {pattern:/\b(fizzbuzz|factorial|fibonacci|bubble sort|binary search|quicksort|quick sort|anagram|palindrome|swap (two )?variables|prime (number )?check)\b/i, type:"code"},
   {pattern:/\b(solve|quadratic|x\^2|x²|gcd|lcm|nCr|nPr|\d+\s*choose\s*\d+|standard deviation|variance|mean of|median of|mode of|prime factors?|factorize|is\s+\d+\s+(?:a\s+)?prime)\b/i, type:"sci_calc"},
   {pattern:/\b(explain simply|eli5|explain like i.?m 5|simple terms|layman)\b/i,        type:"eli5"},
   {pattern:/\b(explain|elaborate|tell me more|go deeper|expand on|break down)\b/i,      type:"explain"},
@@ -1681,14 +1741,18 @@ async function chat(userText, options = {}) {
         response = emo + buildActionGuide(text);
         break;
       case "define":
-      case "what_is":
-        if (WORD_DESCRIPTIONS[subject]) {
+      case "what_is": {
+        const patCodeConcept = CODING_CONCEPTS[subject] || CODING_CONCEPTS[extractCodeConcept(text)];
+        if (patCodeConcept) {
+          response = emo + patCodeConcept;
+        } else if (WORD_DESCRIPTIONS[subject]) {
           response = emo + buildDefinition(subject);
         } else {
           const live = await lookupDictionary(subject);
           response = emo + (live || buildDefinition(subject));
         }
         break;
+      }
       case "reason":
       case "why":
         response = emo + buildReason(subject);
@@ -1740,8 +1804,13 @@ async function chat(userText, options = {}) {
 
   // ── WORD TOOLS ──
   if (!response && intent === "define") {
-    const live = await lookupDictionary(rawSubject);
-    response = emo + (live || buildDefinition(rawSubject));
+    const codeConcept = CODING_CONCEPTS[rawSubject] || CODING_CONCEPTS[extractCodeConcept(text)];
+    if (codeConcept) {
+      response = emo + codeConcept;
+    } else {
+      const live = await lookupDictionary(rawSubject);
+      response = emo + (live || buildDefinition(rawSubject));
+    }
   }
 
   if (!response && intent === "synonyms") {
@@ -1851,8 +1920,11 @@ async function chat(userText, options = {}) {
   }
 
   if (!response && intent === "what_is") {
+    const codeConcept = CODING_CONCEPTS[rawSubject] || CODING_CONCEPTS[extractCodeConcept(text)];
     const desc = WORD_DESCRIPTIONS[rawSubject];
-    if (desc) {
+    if (codeConcept) {
+      response = emo + codeConcept;
+    } else if (desc) {
       response = emo + buildDefinition(rawSubject);
     } else {
       response = emo + await masterResearch(rawSubject);
