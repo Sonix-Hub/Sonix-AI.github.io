@@ -559,8 +559,7 @@
     <div class="auth-box">
         <div id="auth-err" class="auth-err"></div>
         <input class="auth-input" id="auth-nickname" type="text" placeholder="Nickname (optional)">
-        <input class="auth-input" id="auth-email" type="email" placeholder="Email address" autocomplete="email" inputmode="email" name="email">
-        <button class="auth-btn" id="auth-submit" onclick="handleAuth()">Continue</button>
+        <button class="auth-btn" id="auth-submit" onclick="handleEmailButton()">Continue with Email</button>
         <div style="display:flex;align-items:center;gap:10px;margin:14px 0;">
             <div style="flex:1;height:1px;background:#222;"></div>
             <span style="color:#444;font-size:0.7rem;">OR</span>
@@ -568,7 +567,7 @@
         </div>
         <div id="google-signin-button" style="display:flex;justify-content:center;"></div>
         <div style="color:#333;font-size:0.7rem;text-align:center;line-height:1.6;padding:12px 4px 0;">
-            An account is required to use SONIX — this is what keeps your conversations and settings synced across your devices. We'll email you a 6-digit code to confirm it's really you — no password needed.
+            An account is required to use SONIX — this is what keeps your conversations and settings synced across your devices.
         </div>
     </div>
 </div>
@@ -1337,7 +1336,8 @@ function setBdayFields(prefix, bdayStr) {
 function setField(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
 function getField(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
 
-// AUTH — passwordless email (verified by a one-time code) OR Google Sign-In.
+// AUTH — Google Sign-In only, with an optional nickname carried into the account.
+// AUTH — "Continue with Email" button (prompts for email, then a code) OR Google Sign-In.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 function isValidEmail(email) { return EMAIL_RE.test(email); }
 
@@ -1362,18 +1362,20 @@ async function requestAndVerifyEmailCode(email, nickname) {
     }
 }
 
-async function handleAuth() {
+async function handleEmailButton() {
     if (_authLock) return;
     _authLock = true;
     setTimeout(() => { _authLock = false; }, 1500);
 
-    const email = document.getElementById('auth-email').value.trim();
     const nickname = document.getElementById('auth-nickname').value.trim();
-    if (!email) { showAuthErr('Enter your email.'); return; }
-    if (!isValidEmail(email)) { showAuthErr('Enter a real email address, e.g. example@gmail.com'); return; }
+    const email = window.prompt('Enter your email address:');
+    if (email === null) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) { showAuthErr('Enter your email.'); return; }
+    if (!isValidEmail(trimmedEmail)) { showAuthErr('Enter a real email address, e.g. example@gmail.com'); return; }
 
     try {
-        const data = await requestAndVerifyEmailCode(email, nickname);
+        const data = await requestAndVerifyEmailCode(trimmedEmail, nickname);
         if (!data) { showAuthErr('Sign-in cancelled.'); return; }
 
         sessionToken = data.token;
@@ -1948,7 +1950,6 @@ function logout() {
     document.getElementById('chat-window').innerHTML = '<div class="welcome-hero" id="welcome-msg">Hello, SONIX ready to help you</div><div class="typing-bubble" id="typing-indicator"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
     attachWelcomeQuickActions();
     document.getElementById('auth-nickname').value = '';
-    document.getElementById('auth-email').value = '';
     const acctActions = document.getElementById('settings-account-actions');
     if (acctActions) acctActions.style.display = 'none';
     const secRow = document.getElementById('security-row');
@@ -2132,7 +2133,19 @@ function verifyDelType() {
 async function finalDeleteAccount() {
     if (!currentUser || isGuest) { closeModal('delete-step-modal'); return; }
     try {
-        await apiFetch('/api/account', { method: 'DELETE' });
+        // Require a fresh email code before permanently deleting anything.
+        await apiFetch('/api/email-request', { method: 'POST', body: JSON.stringify({ email: currentUser.email }) });
+        while (true) {
+            const code = window.prompt('For your safety, we emailed a code to ' + currentUser.email + '. Enter it to permanently delete your account:');
+            if (code === null) { showToast('Account deletion cancelled'); return; }
+            try {
+                await apiFetch('/api/delete-account-confirm', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
+                break;
+            } catch (e) {
+                const retry = window.confirm((e.message || 'Invalid code') + '\n\nTry entering the code again?');
+                if (!retry) { showToast('Account deletion cancelled'); return; }
+            }
+        }
         closeModal('delete-step-modal');
         showToast('Account deleted');
         setTimeout(() => logout(), 500);
