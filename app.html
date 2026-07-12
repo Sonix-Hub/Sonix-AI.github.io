@@ -554,6 +554,9 @@
 
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
+    <div id="inapp-browser-banner" style="display:none;background:#2a1a00;border:1px solid #f5a623;color:#f5a623;border-radius:10px;padding:12px 14px;margin:0 0 14px;font-size:0.78rem;line-height:1.5;">
+        Google Sign-In won't work inside this app's built-in browser (Instagram, Facebook, TikTok, etc. all block it for security). Tap the <strong>••• menu</strong> at the top or bottom of this screen and choose <strong>"Open in Browser"</strong> or <strong>"Open in Chrome"</strong> to continue — the Email option below still works fine here either way.
+    </div>
     <div class="auth-logo">SONIX</div>
     <div class="auth-tagline">AI CHAT INTERFACE</div>
     <div class="auth-box">
@@ -1240,6 +1243,18 @@ window.onload = async () => {
     document.getElementById('info-build').textContent = new Date().toLocaleDateString();
     applySettings(); // sensible in-memory defaults until cloud settings load, if any
 
+    // Instagram/Facebook/TikTok/Line etc. embed their own browser when you open
+    // a link from inside the app — and Google deliberately refuses to run its
+    // sign-in flow inside those embedded browsers (a security policy on
+    // Google's end, not something this app can work around). Warn people so
+    // they know to escape to their real browser instead of assuming it's broken.
+    const ua = navigator.userAgent || '';
+    const isInAppBrowser = /Instagram|FBAN|FBAV|FB_IAB|Line\/|MicroMessenger|TikTok|musical_ly|Snapchat/i.test(ua);
+    if (isInAppBrowser) {
+        const banner = document.getElementById('inapp-browser-banner');
+        if (banner) banner.style.display = 'block';
+    }
+
     const savedToken = localStorage.getItem('sonix_session_token');
     if (savedToken) {
         sessionToken = savedToken;
@@ -1413,7 +1428,9 @@ function initGoogleSignIn() {
     google.accounts.id.initialize({
         client_id: '646499820139-6o4cgp4179mbqns9fequ9ik9qnv3amo9.apps.googleusercontent.com',
         callback: handleGoogleCredential,
+        auto_select: false,
     });
+    google.accounts.id.disableAutoSelect(); // forces the account picker to show, instead of silently reusing the last account
     const btn = document.getElementById('google-signin-button');
     if (btn) {
         btn.innerHTML = '';
@@ -1938,6 +1955,9 @@ function toggleSecSetting(key, el) {
 
 function logout() {
     localStorage.removeItem('sonix_session_token');
+    if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.disableAutoSelect();
+    }
     sessionToken = null;
     currentUser = null; isGuest = false; sessions = []; currentSessionId = null;
     systemModels = []; activeModelId = 'sonix-core'; projects = [];
@@ -3490,10 +3510,11 @@ function testModelConnection(id) {
 // Generic caller for a user-provided model endpoint. Sends an OpenAI-style
 // chat/completions request and reads several common response shapes so it
 // has the best shot at working with most third-party APIs and proxies.
-async function callCustomModel(model, text, images, systemPrompt) {
+async function callCustomModel(model, text, images, systemPrompt, history) {
     if (!model.endpoint) throw new Error('No API link set for this model.');
     const isGemini = /generativelanguage\.googleapis\.com/i.test(model.endpoint);
     const isOpenAIResponses = /api\.openai\.com\/v1\/responses/i.test(model.endpoint);
+    const priorTurns = history || [];
 
     let body, headers = { 'Content-Type': 'application/json' };
 
@@ -3509,7 +3530,8 @@ async function callCustomModel(model, text, images, systemPrompt) {
                 if (m) parts.push({ inline_data: { mime_type: m[1], data: m[2] } });
             });
         }
-        body = { contents: [{ role: 'user', parts: parts.length ? parts : [{ text: text || 'Hello' }] }] };
+        const priorContents = priorTurns.map(t => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] }));
+        body = { contents: [...priorContents, { role: 'user', parts: parts.length ? parts : [{ text: text || 'Hello' }] }] };
         if (systemPrompt) body.system_instruction = { parts: [{ text: systemPrompt }] };
         if (model.key) headers['x-goog-api-key'] = model.key;
 
@@ -3522,9 +3544,11 @@ async function callCustomModel(model, text, images, systemPrompt) {
         if (model.supportsImages && images && images.length) {
             images.forEach(imgDataUrl => contentParts.push({ type: 'input_image', image_url: imgDataUrl }));
         }
+        const priorInput = priorTurns.map(t => ({ role: t.role, content: t.content }));
+        const currentTurn = { role: 'user', content: contentParts.length > 1 ? contentParts : (text || 'Hello') };
         body = {
             model: model.name || 'gpt-4o',
-            input: contentParts.length > 1 ? [{ role: 'user', content: contentParts }] : (text || 'Hello'),
+            input: priorInput.length ? [...priorInput, currentTurn] : (contentParts.length > 1 ? [currentTurn] : (text || 'Hello')),
         };
         if (systemPrompt) body.instructions = systemPrompt;
         if (model.key) headers['Authorization'] = 'Bearer ' + model.key;
@@ -3537,6 +3561,7 @@ async function callCustomModel(model, text, images, systemPrompt) {
         }
         const messages = [];
         if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+        priorTurns.forEach(t => messages.push({ role: t.role, content: t.content }));
         messages.push({ role: 'user', content: content.length > 1 ? content : (text || 'Hello') });
         body = { model: model.name || 'default', messages, max_tokens: 1000 };
         if (model.key) {
@@ -3619,6 +3644,20 @@ async function callDevToolBoxModel(text) {
     return { type: 'text', text: reply };
 }
 
+// Builds the prior turns of the current session as a plain {role, content}
+// array, so every request to a user-provided API includes real context
+// instead of just the single latest message. The most recent entry is
+// skipped since that's the current turn, already passed in separately.
+function _buildConversationHistory(maxTurns) {
+    const cap = maxTurns || 20;
+    const s = sessions.find(x => x.id === currentSessionId);
+    if (!s || !s.messages || s.messages.length < 2) return [];
+    const usable = s.messages.filter(m => (m.role === 'user' || m.role === 'ai') && typeof m.text === 'string' && m.text.trim());
+    const priorTurns = usable.slice(0, -1); // drop the current turn — caller sends it separately
+    const capped = priorTurns.slice(-cap);
+    return capped.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+}
+
 // Routes a message to whichever model is currently selected
 async function getAIReply(text, images) {
     if (activeModelId === 'devtoolbox-free') return await callDevToolBoxModel(text);
@@ -3629,7 +3668,8 @@ async function getAIReply(text, images) {
             saveSystemModels();
         } else {
             const improvementPrompt = getActiveImprovementPrompt();
-            const result = await callCustomModel(model, text, images || [], improvementPrompt);
+            const history = _buildConversationHistory();
+            const result = await callCustomModel(model, text, images || [], improvementPrompt, history);
             model.status = 'ok';
             model.lastError = '';
             saveSystemModels();
