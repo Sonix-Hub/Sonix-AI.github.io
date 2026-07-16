@@ -7,9 +7,9 @@
     <style>
         :root {
             --bg: #000;
-            --accent: #00ff41;
-            --accent-dim: rgba(0,255,65,0.12);
-            --accent-glow: rgba(0,255,65,0.35);
+            --accent: #ffffff;
+            --accent-dim: rgba(255,255,255,0.12);
+            --accent-glow: rgba(255,255,255,0.35);
             --text: #fff;
             --muted: #444;
             --border: #1a1a1a;
@@ -23,24 +23,16 @@
             color: var(--text); overflow: hidden;
         }
 
-        /* ── SCANLINE ambient overlay ── */
         body::before {
             content: '';
             position: fixed; inset: 0; pointer-events: none; z-index: 0;
             background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(0,0,0,0.06) 2px,
-                rgba(0,0,0,0.06) 4px
+                0deg, transparent, transparent 2px,
+                rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
             );
         }
 
-        /* ── SLIDES CONTAINER ── */
-        #slides {
-            position: fixed; inset: 0; z-index: 1;
-            display: flex; flex-direction: column;
-        }
+        #slides { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; }
 
         .slide {
             position: absolute; inset: 0;
@@ -51,16 +43,9 @@
             transition: opacity 0.45s ease, transform 0.45s ease;
             transform: translateY(18px);
         }
-        .slide.active {
-            opacity: 1; pointer-events: all;
-            transform: translateY(0);
-        }
-        .slide.exit {
-            opacity: 0; pointer-events: none;
-            transform: translateY(-18px);
-        }
+        .slide.active { opacity: 1; pointer-events: all; transform: translateY(0); }
+        .slide.exit { opacity: 0; pointer-events: none; transform: translateY(-18px); }
 
-        /* ── BOTTOM NAV ── */
         #nav {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
             padding: 20px 28px calc(20px + env(safe-area-inset-bottom));
@@ -68,18 +53,9 @@
             display: flex; flex-direction: column; align-items: center; gap: 14px;
         }
 
-        #dots {
-            display: flex; gap: 8px; align-items: center;
-        }
-        .dot {
-            width: 6px; height: 6px; border-radius: 50%;
-            background: var(--border); transition: 0.3s;
-        }
-        .dot.active {
-            background: var(--accent);
-            width: 20px; border-radius: 3px;
-            box-shadow: 0 0 6px var(--accent-glow);
-        }
+        #dots { display: flex; gap: 8px; align-items: center; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: 0.3s; }
+        .dot.active { background: var(--accent); width: 20px; border-radius: 3px; box-shadow: 0 0 6px var(--accent-glow); }
 
         #btn-next {
             width: 100%; max-width: 360px;
@@ -100,52 +76,35 @@
         #btn-skip:hover { color: #888; }
         #btn-skip.hidden { visibility: hidden; pointer-events: none; }
 
-        /* ─── SLIDE 1 — LOGO / INTRO ─── */
-        .logo-wrap {
-            display: flex; flex-direction: column;
-            align-items: center; gap: 10px;
-            margin-bottom: 48px;
-        }
+        .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-bottom: 48px; }
         .logo-mark {
-            width: 72px; height: 72px; border-radius: 22px;
+            width: 90px; height: 90px; border-radius: 22px;
             border: 2px solid var(--accent);
             background: #0a0a0a;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 28px var(--accent-glow), inset 0 0 16px rgba(0,255,65,0.05);
+            box-shadow: 0 0 28px var(--accent-glow), inset 0 0 16px rgba(255,255,255,0.05);
             animation: pulse-border 3s ease-in-out infinite;
         }
         @keyframes pulse-border {
-            0%, 100% { box-shadow: 0 0 28px var(--accent-glow), inset 0 0 16px rgba(0,255,65,0.05); }
-            50% { box-shadow: 0 0 48px rgba(0,255,65,0.5), inset 0 0 20px rgba(0,255,65,0.1); }
+            0%, 100% { box-shadow: 0 0 28px var(--accent-glow), inset 0 0 16px rgba(255,255,255,0.05); }
+            50% { box-shadow: 0 0 48px rgba(255,255,255,0.5), inset 0 0 20px rgba(255,255,255,0.1); }
         }
-        .logo-mark svg { width: 36px; height: 36px; }
-        .logo-name {
-            font-size: 2.8rem; font-weight: 900;
-            color: var(--accent); letter-spacing: 10px;
-        }
-        .logo-version {
-            color: var(--muted); font-size: 0.68rem;
-            letter-spacing: 3px;
-        }
+        .logo-mark svg { width: 48px; height: auto; }
+        .logo-wordmark svg { width: 200px; height: auto; }
+        .logo-version { color: var(--muted); font-size: 0.68rem; letter-spacing: 3px; }
         .slide1-headline {
             font-size: 1.55rem; font-weight: 800;
             text-align: center; line-height: 1.3;
             letter-spacing: -0.5px; margin-bottom: 14px;
             max-width: 320px;
         }
-        .slide1-sub {
-            color: #666; font-size: 0.88rem;
-            text-align: center; line-height: 1.7;
-            max-width: 300px;
-        }
+        .slide1-sub { color: #666; font-size: 0.88rem; text-align: center; line-height: 1.7; max-width: 300px; }
 
-        /* ─── FEATURE SLIDES ─── */
         .feature-icon {
             width: 80px; height: 80px; border-radius: 24px;
             background: #0a0a0a; border: 1px solid #2a2a2a;
             display: flex; align-items: center; justify-content: center;
-            margin-bottom: 32px;
-            position: relative;
+            margin-bottom: 32px; position: relative;
         }
         .feature-icon::after {
             content: '';
@@ -153,42 +112,23 @@
             background: linear-gradient(135deg, var(--accent-dim), transparent 60%);
         }
         .feature-icon svg { width: 36px; height: 36px; position: relative; z-index: 1; }
-        .feature-label {
-            color: var(--accent); font-size: 0.7rem;
-            letter-spacing: 3px; text-transform: uppercase;
-            margin-bottom: 12px;
-        }
+        .feature-label { color: var(--accent); font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
         .feature-title {
             font-size: 1.75rem; font-weight: 800;
             text-align: center; letter-spacing: -0.5px;
-            line-height: 1.2; margin-bottom: 16px;
-            max-width: 300px;
+            line-height: 1.2; margin-bottom: 16px; max-width: 300px;
         }
-        .feature-desc {
-            color: #666; font-size: 0.88rem;
-            text-align: center; line-height: 1.75;
-            max-width: 300px;
-        }
+        .feature-desc { color: #666; font-size: 0.88rem; text-align: center; line-height: 1.75; max-width: 300px; }
 
-        /* Persona pills */
-        .persona-pills {
-            display: flex; flex-wrap: wrap; gap: 8px;
-            justify-content: center; margin-top: 24px;
-            max-width: 320px;
-        }
+        .persona-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 24px; max-width: 320px; }
         .pill {
             background: #0d0d0d; border: 1px solid #2a2a2a;
             border-radius: 20px; padding: 7px 14px;
-            font-size: 0.75rem; color: #888;
-            transition: 0.2s; cursor: default;
+            font-size: 0.75rem; color: #888; transition: 0.2s; cursor: default;
         }
-        .pill.lit { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .pill.lit { border-color: var(--accent); color: #000; background: var(--accent); }
 
-        /* Capability list */
-        .cap-list {
-            display: flex; flex-direction: column;
-            gap: 12px; margin-top: 24px; width: 100%; max-width: 320px;
-        }
+        .cap-list { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; width: 100%; max-width: 320px; }
         .cap-item {
             display: flex; align-items: center; gap: 14px;
             background: #0a0a0a; border: 1px solid #1a1a1a;
@@ -197,28 +137,26 @@
         .cap-item-icon {
             width: 36px; height: 36px; border-radius: 10px;
             background: #111; border: 1px solid #2a2a2a;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .cap-item-icon svg { width: 18px; height: 18px; }
         .cap-item-text { font-size: 0.83rem; color: #ccc; line-height: 1.4; }
         .cap-item-text strong { color: var(--text); display: block; margin-bottom: 2px; }
 
-        /* ─── SLIDE 4 — GET STARTED ─── */
         .ready-glow {
             width: 110px; height: 110px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(0,255,65,0.18) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
             display: flex; align-items: center; justify-content: center;
             margin-bottom: 32px; position: relative;
         }
         .ready-glow::before {
             content: ''; position: absolute; inset: 8px;
-            border-radius: 50%; border: 1.5px solid rgba(0,255,65,0.3);
+            border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.3);
             animation: spin-slow 8s linear infinite;
         }
         .ready-glow::after {
             content: ''; position: absolute; inset: 20px;
-            border-radius: 50%; border: 1px dashed rgba(0,255,65,0.15);
+            border-radius: 50%; border: 1px dashed rgba(255,255,255,0.15);
             animation: spin-slow 14s linear infinite reverse;
         }
         @keyframes spin-slow { to { transform: rotate(360deg); } }
@@ -231,81 +169,51 @@
             box-shadow: 0 0 24px var(--accent-glow);
         }
         .ready-core svg { width: 30px; height: 30px; }
-        .ready-title {
-            font-size: 2rem; font-weight: 900;
-            text-align: center; letter-spacing: -0.5px;
-            margin-bottom: 12px;
-        }
+        .ready-title { font-size: 2rem; font-weight: 900; text-align: center; letter-spacing: -0.5px; margin-bottom: 12px; }
         .ready-title span { color: var(--accent); }
-        .ready-sub {
-            color: #555; font-size: 0.85rem;
-            text-align: center; line-height: 1.7;
-            max-width: 280px;
-        }
+        .ready-sub { color: #555; font-size: 0.85rem; text-align: center; line-height: 1.7; max-width: 280px; }
 
-        /* ─── BOOT SEQUENCE (after last tap) ─── */
         #boot-screen {
             position: fixed; inset: 0; z-index: 100;
             background: #000; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-            gap: 24px;
+            flex-direction: column; align-items: center; justify-content: center; gap: 24px;
         }
         #boot-screen.show { display: flex; }
-        .boot-logo { font-size: 2.2rem; font-weight: 900; color: var(--accent); letter-spacing: 8px; }
+        .boot-logo svg { width: 180px; height: auto; }
         .boot-lines { display: flex; flex-direction: column; gap: 8px; width: 240px; }
         .boot-line {
             display: flex; align-items: center; gap: 10px;
-            color: #333; font-size: 0.72rem; letter-spacing: 1px;
-            transition: color 0.3s;
+            color: #333; font-size: 0.72rem; letter-spacing: 1px; transition: color 0.3s;
         }
         .boot-line.done { color: var(--accent); }
-        .boot-line .bl-dot {
-            width: 6px; height: 6px; border-radius: 50%;
-            background: #222; flex-shrink: 0; transition: background 0.3s;
-        }
+        .boot-line .bl-dot { width: 6px; height: 6px; border-radius: 50%; background: #222; flex-shrink: 0; transition: background 0.3s; }
         .boot-line.done .bl-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-        .boot-bar-wrap {
-            width: 200px; height: 2px; background: #111; border-radius: 2px; overflow: hidden;
-        }
-        .boot-bar {
-            height: 100%; width: 0%; background: var(--accent);
-            border-radius: 2px; transition: width 0.25s ease;
-            box-shadow: 0 0 8px var(--accent);
-        }
+        .boot-bar-wrap { width: 200px; height: 2px; background: #111; border-radius: 2px; overflow: hidden; }
+        .boot-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; transition: width 0.25s ease; box-shadow: 0 0 8px var(--accent); }
 
-        /* ─── NOTICE CARD ─── */
         .notice-card {
             margin-top: 24px; width: 100%; max-width: 320px;
-            background: rgba(245,166,35,0.05);
-            border: 1px solid rgba(245,166,35,0.3);
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.25);
             border-radius: 16px; padding: 14px 16px;
         }
-        .notice-header {
-            display: flex; align-items: center; gap: 8px;
-            margin-bottom: 10px;
-        }
+        .notice-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
         .notice-header svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .notice-header span {
-            color: #f5a623; font-size: 0.72rem;
-            font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-        }
-        .notice-body {
-            color: #777; font-size: 0.78rem; line-height: 1.7;
-        }
+        .notice-header span { color: #ddd; font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        .notice-body { color: #777; font-size: 0.78rem; line-height: 1.7; }
         .notice-body strong { color: #bbb; }
         .notice-link {
             display: inline-block; margin-top: 6px;
             color: var(--accent); font-size: 0.78rem;
-            text-decoration: none; border-bottom: 1px solid rgba(0,255,65,0.3);
+            text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3);
             transition: border-color 0.2s;
         }
         .notice-link:hover { border-color: var(--accent); }
-        /* ─── OPEN IN CHROME BANNER ─── */
+
         #chrome-banner {
             position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
             background: #0d0d0d; border-bottom: 1px solid #2a2a2a;
-            padding: 12px 16px; display: none;
-            align-items: center; gap: 12px;
+            padding: 12px 16px; display: none; align-items: center; gap: 12px;
         }
         #chrome-banner.show { display: flex; }
         .chrome-banner-icon { flex-shrink: 0; }
@@ -316,20 +224,18 @@
             background: var(--accent); color: #000;
             border: none; border-radius: 10px;
             padding: 8px 14px; font-size: 0.75rem;
-            font-weight: 800; cursor: pointer;
-            white-space: nowrap; flex-shrink: 0;
+            font-weight: 800; cursor: pointer; white-space: nowrap; flex-shrink: 0;
         }
     </style>
 </head>
 <body>
 
-<!-- OPEN IN CHROME BANNER -->
 <div id="chrome-banner">
     <div class="chrome-banner-icon">
         <svg viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="#4285F4" stroke-width="1.5"/>
-            <circle cx="12" cy="12" r="4" fill="#4285F4"/>
-            <path d="M12 8h8.5M6.5 18.5l4-7M17.5 18.5l-4-7" stroke="#4285F4" stroke-width="1.5"/>
+            <circle cx="12" cy="12" r="10" stroke="#ffffff" stroke-width="1.5"/>
+            <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+            <path d="M12 8h8.5M6.5 18.5l4-7M17.5 18.5l-4-7" stroke="#ffffff" stroke-width="1.5"/>
         </svg>
     </div>
     <div class="chrome-banner-text">
@@ -339,29 +245,36 @@
     <button class="chrome-banner-btn" onclick="openInChrome()">Open ↗</button>
 </div>
 
-<!-- SLIDES -->
 <div id="slides">
 
-    <!-- SLIDE 0 — INTRO -->
     <div class="slide active" data-slide="0">
         <div class="logo-wrap">
             <div class="logo-mark">
                 <svg viewBox="0 0 36 36" fill="none">
-                    <circle cx="18" cy="18" r="14" stroke="#00ff41" stroke-width="1.5"/>
-                    <path d="M11 18h4l2-5 3 10 2-5h3" stroke="#00ff41" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="18" cy="18" r="14" stroke="#ffffff" stroke-width="1.5"/>
+                    <path d="M11 18h4l2-5 3 10 2-5h3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
-            <div class="logo-name">SONIX</div>
+            <div class="logo-wordmark">
+                <!-- Exact wordmark artwork extracted from New_Project_6__1_.xml (Group 2 + Group 3 shapes) — path points untouched -->
+                <svg viewBox="2362.5 1816.3 874.6 251.2" fill="#ffffff">
+                    <path d="M2669.546 1987.524 L2669.546 1855.331 L2706.933 1836.572 L2827.342 1836.318 L2886.534 1987.524 L2838.764 1987.524 L2797.060 1864.069 L2717.397 1864.069 L2717.397 1937.579 L2669.546 1987.524 Z"/>
+                    <path d="M3162.386 2000.399 L3135.267 1920.937 L3063.021 2001.361 L3063.021 2001.361 L3024.111 1998.531 L3108.205 1891.078 L3069.805 1847.659 L3109.545 1840.253 L3136.079 1861.226 L3149.722 1841.868 L3214.486 1841.868 L3162.330 1889.274 L3217.080 2000.172 L3162.386 2000.399 Z"/>
+                    <path d="M2921.825 1997.721 L2969.424 1943.752 L2969.424 1840.128 L2920.104 1840.128 L2921.825 1997.721 Z"/>
+                    <path d="M2382.475 1987.148 L2426.041 1937.879 L2426.041 1873.405 L2554.875 1873.569 L2554.905 1959.292 L2432.533 1962.099 L2411.510 1987.239 L2574.823 1987.372 L2601.570 1976.099 L2601.625 1855.289 L2574.820 1838.927 L2400.709 1839.019 L2382.475 1855.279 L2382.475 1987.148 Z"/>
+                    <path d="M2993.289 1863.522 L2802.486 1863.522 L2756.225 1886.045 L2756.225 1980.624 L2804.079 1934.637 L2804.079 1901.060 L2950.863 1901.060 L2993.289 1863.522 Z"/>
+                    <path d="M2786.231 1978.499 L2809.913 1951.841 L2957.886 1951.841 L2991.847 2029.641 L2945.443 2047.536 L2736.745 2047.551 L2770.600 2014.913 L2920.253 2014.913 L2920.253 1981.503 L2786.231 1978.499 Z"/>
+                </svg>
+            </div>
             <div class="logo-version">v3.0.0 &nbsp;·&nbsp; BY VLAD</div>
         </div>
         <div class="slide1-headline">Your AI, built different.</div>
         <div class="slide1-sub">Fast responses, multiple personas, and a knowledge engine that goes well beyond basic chat.</div>
     </div>
 
-    <!-- SLIDE 1 — PERSONAS -->
     <div class="slide" data-slide="1">
         <div class="feature-icon">
-            <svg viewBox="0 0 36 36" fill="none" stroke="#00ff41" stroke-width="1.8" stroke-linecap="round">
+            <svg viewBox="0 0 36 36" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                 <circle cx="18" cy="13" r="5"/>
                 <path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12"/>
                 <path d="M26 18l3 3-3 3"/>
@@ -384,52 +297,41 @@
         </div>
     </div>
 
-    <!-- SLIDE 2 — CAPABILITIES -->
     <div class="slide" data-slide="2">
         <div class="feature-label">Built-in engines</div>
         <div class="feature-title">More than chat</div>
         <div class="cap-list">
             <div class="cap-item">
                 <div class="cap-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#00ff41" stroke-width="1.8" stroke-linecap="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                         <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
                     </svg>
                 </div>
-                <div class="cap-item-text">
-                    <strong>Advanced Math</strong>
-                    Algebra, calculus, stats, quadratics, finance
-                </div>
+                <div class="cap-item-text"><strong>Advanced Math</strong>Algebra, calculus, stats, quadratics, finance</div>
             </div>
             <div class="cap-item">
                 <div class="cap-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#00ff41" stroke-width="1.8" stroke-linecap="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
                 </div>
-                <div class="cap-item-text">
-                    <strong>Live Research</strong>
-                    Wikipedia + DuckDuckGo lookups in real time
-                </div>
+                <div class="cap-item-text"><strong>Live Research</strong>Wikipedia + DuckDuckGo lookups in real time</div>
             </div>
             <div class="cap-item">
                 <div class="cap-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#00ff41" stroke-width="1.8" stroke-linecap="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                     </svg>
                 </div>
-                <div class="cap-item-text">
-                    <strong>Emotional Intelligence</strong>
-                    Detects your mood and adjusts its tone
-                </div>
+                <div class="cap-item-text"><strong>Emotional Intelligence</strong>Detects your mood and adjusts its tone</div>
             </div>
         </div>
     </div>
 
-    <!-- SLIDE 3 — GET STARTED -->
     <div class="slide" data-slide="3">
         <div class="ready-glow">
             <div class="ready-core">
-                <svg viewBox="0 0 30 30" fill="none" stroke="#00ff41" stroke-width="1.8" stroke-linecap="round">
+                <svg viewBox="0 0 30 30" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                     <polyline points="6 15 12 21 24 9"/>
                 </svg>
             </div>
@@ -437,13 +339,12 @@
         <div class="ready-title">SONIX is <span>ready.</span></div>
         <div class="ready-sub">Sign in or continue as a guest. Your conversations stay private and on-device.</div>
 
-        <!-- CAUTION NOTICE -->
         <div class="notice-card">
             <div class="notice-header">
-                <svg viewBox="0 0 20 20" fill="none" stroke="#f5a623" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 20 20" fill="none" stroke="#ddd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M10 2L2 17h16L10 2z"/>
                     <line x1="10" y1="9" x2="10" y2="12"/>
-                    <circle cx="10" cy="15" r="0.5" fill="#f5a623"/>
+                    <circle cx="10" cy="15" r="0.5" fill="#ddd"/>
                 </svg>
                 <span>Early Access Notice</span>
             </div>
@@ -458,16 +359,23 @@
 
 </div>
 
-<!-- NAV -->
 <div id="nav">
     <div id="dots"></div>
     <button id="btn-next">Get Started</button>
     <button id="btn-skip">Skip intro</button>
 </div>
 
-<!-- BOOT OVERLAY -->
 <div id="boot-screen">
-    <div class="boot-logo">SONIX</div>
+    <div class="boot-logo">
+        <svg viewBox="2362.5 1816.3 874.6 251.2" fill="#ffffff">
+            <path d="M2669.546 1987.524 L2669.546 1855.331 L2706.933 1836.572 L2827.342 1836.318 L2886.534 1987.524 L2838.764 1987.524 L2797.060 1864.069 L2717.397 1864.069 L2717.397 1937.579 L2669.546 1987.524 Z"/>
+            <path d="M3162.386 2000.399 L3135.267 1920.937 L3063.021 2001.361 L3063.021 2001.361 L3024.111 1998.531 L3108.205 1891.078 L3069.805 1847.659 L3109.545 1840.253 L3136.079 1861.226 L3149.722 1841.868 L3214.486 1841.868 L3162.330 1889.274 L3217.080 2000.172 L3162.386 2000.399 Z"/>
+            <path d="M2921.825 1997.721 L2969.424 1943.752 L2969.424 1840.128 L2920.104 1840.128 L2921.825 1997.721 Z"/>
+            <path d="M2382.475 1987.148 L2426.041 1937.879 L2426.041 1873.405 L2554.875 1873.569 L2554.905 1959.292 L2432.533 1962.099 L2411.510 1987.239 L2574.823 1987.372 L2601.570 1976.099 L2601.625 1855.289 L2574.820 1838.927 L2400.709 1839.019 L2382.475 1855.279 L2382.475 1987.148 Z"/>
+            <path d="M2993.289 1863.522 L2802.486 1863.522 L2756.225 1886.045 L2756.225 1980.624 L2804.079 1934.637 L2804.079 1901.060 L2950.863 1901.060 L2993.289 1863.522 Z"/>
+            <path d="M2786.231 1978.499 L2809.913 1951.841 L2957.886 1951.841 L2991.847 2029.641 L2945.443 2047.536 L2736.745 2047.551 L2770.600 2014.913 L2920.253 2014.913 L2920.253 1981.503 L2786.231 1978.499 Z"/>
+        </svg>
+    </div>
     <div class="boot-lines">
         <div class="boot-line" id="bl-0"><div class="bl-dot"></div>Loading model engine...</div>
         <div class="boot-line" id="bl-1"><div class="bl-dot"></div>Initialising personas...</div>
@@ -486,7 +394,6 @@
     const btnNext  = document.getElementById('btn-next');
     const btnSkip  = document.getElementById('btn-skip');
 
-    // Build dots
     for (let i = 0; i < TOTAL; i++) {
         const d = document.createElement('div');
         d.className = 'dot' + (i === 0 ? ' active' : '');
@@ -505,7 +412,6 @@
         getDots()[current].classList.add('active');
         slides[current].classList.add('active');
 
-        // Update button label
         if (current === TOTAL - 1) {
             btnNext.textContent = 'Launch SONIX →';
             btnSkip.classList.add('hidden');
@@ -514,24 +420,17 @@
             btnSkip.classList.remove('hidden');
         }
 
-        // Animate persona pills on slide 1
         if (current === 1) animatePills();
     }
 
     function animatePills() {
         const pills = document.querySelectorAll('#persona-pills .pill');
         pills.forEach(p => p.classList.remove('lit'));
-        pills.forEach((p, i) => {
-            setTimeout(() => p.classList.add('lit'), i * 80);
-        });
+        pills.forEach((p, i) => { setTimeout(() => p.classList.add('lit'), i * 80); });
     }
 
     btnNext.addEventListener('click', () => {
-        if (current < TOTAL - 1) {
-            goTo(current + 1);
-        } else {
-            launchBoot();
-        }
+        if (current < TOTAL - 1) { goTo(current + 1); } else { launchBoot(); }
     });
 
     btnSkip.addEventListener('click', launchBoot);
@@ -554,7 +453,6 @@
         });
     }
 
-    // ── INSTAGRAM / IN-APP BROWSER DETECTION ──
     function openInChrome() {
         const url = window.location.href;
         const isAndroid = /android/i.test(navigator.userAgent);
@@ -563,9 +461,7 @@
             window.location.href = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
         } else if (isIOS) {
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => {
-                    alert('Link copied! Open Chrome or Safari and paste it.');
-                });
+                navigator.clipboard.writeText(url).then(() => { alert('Link copied! Open Chrome or Safari and paste it.'); });
             } else {
                 prompt('Copy this link and open in Chrome:', url);
             }
