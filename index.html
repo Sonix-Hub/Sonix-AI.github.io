@@ -77,20 +77,12 @@
         #btn-skip.hidden { visibility: hidden; pointer-events: none; }
 
         .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-bottom: 48px; }
-        .logo-mark {
-            width: 90px; height: 90px; border-radius: 22px;
-            border: 2px solid var(--accent);
-            background: #0a0a0a;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 28px var(--accent-glow), inset 0 0 16px rgba(255,255,255,0.05);
-            animation: pulse-border 3s ease-in-out infinite;
+        .logo-video {
+            width: 260px; max-width: 78vw; height: auto;
+            border-radius: 18px;
+            display: block;
+            background: #000;
         }
-        @keyframes pulse-border {
-            0%, 100% { box-shadow: 0 0 28px var(--accent-glow), inset 0 0 16px rgba(255,255,255,0.05); }
-            50% { box-shadow: 0 0 48px rgba(255,255,255,0.5), inset 0 0 20px rgba(255,255,255,0.1); }
-        }
-        .logo-mark svg { width: 48px; height: auto; }
-        .logo-wordmark svg { width: 200px; height: auto; }
         .logo-version { color: var(--muted); font-size: 0.68rem; letter-spacing: 3px; }
         .slide1-headline {
             font-size: 1.55rem; font-weight: 800;
@@ -179,7 +171,12 @@
             flex-direction: column; align-items: center; justify-content: center; gap: 24px;
         }
         #boot-screen.show { display: flex; }
-        .boot-logo svg { width: 180px; height: auto; }
+        .boot-logo-video {
+            width: 220px; max-width: 70vw; height: auto;
+            border-radius: 16px;
+            display: block;
+            background: #000;
+        }
         .boot-lines { display: flex; flex-direction: column; gap: 8px; width: 240px; }
         .boot-line {
             display: flex; align-items: center; gap: 10px;
@@ -249,23 +246,7 @@
 
     <div class="slide active" data-slide="0">
         <div class="logo-wrap">
-            <div class="logo-mark">
-                <svg viewBox="0 0 36 36" fill="none">
-                    <circle cx="18" cy="18" r="14" stroke="#ffffff" stroke-width="1.5"/>
-                    <path d="M11 18h4l2-5 3 10 2-5h3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </div>
-            <div class="logo-wordmark">
-                <!-- Exact wordmark artwork extracted from New_Project_6__1_.xml (Group 2 + Group 3 shapes) — path points untouched -->
-                <svg viewBox="2362.5 1816.3 874.6 251.2" fill="#ffffff">
-                    <path d="M2669.546 1987.524 L2669.546 1855.331 L2706.933 1836.572 L2827.342 1836.318 L2886.534 1987.524 L2838.764 1987.524 L2797.060 1864.069 L2717.397 1864.069 L2717.397 1937.579 L2669.546 1987.524 Z"/>
-                    <path d="M3162.386 2000.399 L3135.267 1920.937 L3063.021 2001.361 L3063.021 2001.361 L3024.111 1998.531 L3108.205 1891.078 L3069.805 1847.659 L3109.545 1840.253 L3136.079 1861.226 L3149.722 1841.868 L3214.486 1841.868 L3162.330 1889.274 L3217.080 2000.172 L3162.386 2000.399 Z"/>
-                    <path d="M2921.825 1997.721 L2969.424 1943.752 L2969.424 1840.128 L2920.104 1840.128 L2921.825 1997.721 Z"/>
-                    <path d="M2382.475 1987.148 L2426.041 1937.879 L2426.041 1873.405 L2554.875 1873.569 L2554.905 1959.292 L2432.533 1962.099 L2411.510 1987.239 L2574.823 1987.372 L2601.570 1976.099 L2601.625 1855.289 L2574.820 1838.927 L2400.709 1839.019 L2382.475 1855.279 L2382.475 1987.148 Z"/>
-                    <path d="M2993.289 1863.522 L2802.486 1863.522 L2756.225 1886.045 L2756.225 1980.624 L2804.079 1934.637 L2804.079 1901.060 L2950.863 1901.060 L2993.289 1863.522 Z"/>
-                    <path d="M2786.231 1978.499 L2809.913 1951.841 L2957.886 1951.841 L2991.847 2029.641 L2945.443 2047.536 L2736.745 2047.551 L2770.600 2014.913 L2920.253 2014.913 L2920.253 1981.503 L2786.231 1978.499 Z"/>
-                </svg>
-            </div>
+            <video class="logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
             <div class="logo-version">v3.0.0 &nbsp;·&nbsp; BY VLAD</div>
         </div>
         <div class="slide1-headline">Your AI, built different.</div>
@@ -366,16 +347,7 @@
 </div>
 
 <div id="boot-screen">
-    <div class="boot-logo">
-        <svg viewBox="2362.5 1816.3 874.6 251.2" fill="#ffffff">
-            <path d="M2669.546 1987.524 L2669.546 1855.331 L2706.933 1836.572 L2827.342 1836.318 L2886.534 1987.524 L2838.764 1987.524 L2797.060 1864.069 L2717.397 1864.069 L2717.397 1937.579 L2669.546 1987.524 Z"/>
-            <path d="M3162.386 2000.399 L3135.267 1920.937 L3063.021 2001.361 L3063.021 2001.361 L3024.111 1998.531 L3108.205 1891.078 L3069.805 1847.659 L3109.545 1840.253 L3136.079 1861.226 L3149.722 1841.868 L3214.486 1841.868 L3162.330 1889.274 L3217.080 2000.172 L3162.386 2000.399 Z"/>
-            <path d="M2921.825 1997.721 L2969.424 1943.752 L2969.424 1840.128 L2920.104 1840.128 L2921.825 1997.721 Z"/>
-            <path d="M2382.475 1987.148 L2426.041 1937.879 L2426.041 1873.405 L2554.875 1873.569 L2554.905 1959.292 L2432.533 1962.099 L2411.510 1987.239 L2574.823 1987.372 L2601.570 1976.099 L2601.625 1855.289 L2574.820 1838.927 L2400.709 1839.019 L2382.475 1855.279 L2382.475 1987.148 Z"/>
-            <path d="M2993.289 1863.522 L2802.486 1863.522 L2756.225 1886.045 L2756.225 1980.624 L2804.079 1934.637 L2804.079 1901.060 L2950.863 1901.060 L2993.289 1863.522 Z"/>
-            <path d="M2786.231 1978.499 L2809.913 1951.841 L2957.886 1951.841 L2991.847 2029.641 L2945.443 2047.536 L2736.745 2047.551 L2770.600 2014.913 L2920.253 2014.913 L2920.253 1981.503 L2786.231 1978.499 Z"/>
-        </svg>
-    </div>
+    <video class="boot-logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
     <div class="boot-lines">
         <div class="boot-line" id="bl-0"><div class="bl-dot"></div>Loading model engine...</div>
         <div class="boot-line" id="bl-1"><div class="bl-dot"></div>Initialising personas...</div>
