@@ -4,15 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SONIX — Welcome</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #000;
-            --accent: #ffffff;
-            --accent-dim: rgba(255,255,255,0.12);
-            --accent-glow: rgba(255,255,255,0.35);
-            --text: #fff;
-            --muted: #444;
-            --border: #1a1a1a;
+            --bg: #ffffff;
+            --ink: #000000;
+            --ink-soft: #707070;
+            --ink-faint: #b5b5b5;
+            --shadow-on-dark: #000000;
+            --shadow-on-light: #000000;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -20,16 +22,35 @@
         html, body {
             height: 100%; background: var(--bg);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            color: var(--text); overflow: hidden;
+            color: var(--ink); overflow: hidden;
         }
+
+        h1, h2, .disp { font-family: 'Space Grotesk', 'Inter', sans-serif; }
 
         body::before {
             content: '';
             position: fixed; inset: 0; pointer-events: none; z-index: 0;
             background: repeating-linear-gradient(
                 0deg, transparent, transparent 2px,
-                rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+                rgba(0,0,0,0.035) 2px, rgba(0,0,0,0.035) 4px
             );
+        }
+
+        /* Signature building block: the "sticker" — thick border + hard
+           offset shadow made from a solid duplicate shape sitting behind it.
+           Repeated everywhere for cohesion. */
+        .sticker {
+            position: relative;
+            border: 3px solid #000;
+            background: #000;
+        }
+        .sticker::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: var(--shadow-on-dark);
+            transform: translate(7px, 7px);
+            z-index: -1;
+            border-radius: inherit;
         }
 
         #slides { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; }
@@ -38,189 +59,210 @@
             position: absolute; inset: 0;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            padding: 40px 28px 110px;
+            padding: 40px 26px 118px;
             opacity: 0; pointer-events: none;
-            transition: opacity 0.45s ease, transform 0.45s ease;
-            transform: translateY(18px);
+            transition: opacity 0.4s ease, transform 0.5s cubic-bezier(.2,.9,.25,1.2);
+            transform: translateY(26px) scale(0.97);
         }
-        .slide.active { opacity: 1; pointer-events: all; transform: translateY(0); }
-        .slide.exit { opacity: 0; pointer-events: none; transform: translateY(-18px); }
+        .slide.active { opacity: 1; pointer-events: all; transform: translateY(0) scale(1); }
+        .slide.exit { opacity: 0; pointer-events: none; transform: translateY(-26px) scale(0.97); }
 
         #nav {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
             padding: 20px 28px calc(20px + env(safe-area-inset-bottom));
-            background: linear-gradient(transparent, #000 45%);
-            display: flex; flex-direction: column; align-items: center; gap: 14px;
+            background: linear-gradient(transparent, #fff 50%);
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
         }
 
-        #dots { display: flex; gap: 8px; align-items: center; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: 0.3s; }
-        .dot.active { background: var(--accent); width: 20px; border-radius: 3px; box-shadow: 0 0 6px var(--accent-glow); }
+        #dots { display: flex; gap: 7px; align-items: center; }
+        .dot { width: 22px; height: 6px; background: #e5e5e5; border: 1.5px solid #ddd; transition: 0.3s; }
+        .dot.active { background: var(--ink); border-color: var(--ink); box-shadow: 3px 3px 0 0 #000; }
 
         #btn-next {
             width: 100%; max-width: 360px;
-            background: var(--accent); color: #000;
-            border: none; border-radius: 14px;
+            background: var(--ink); color: #fff;
+            border: 3px solid var(--ink);
+            box-shadow: 6px 6px 0 0 var(--shadow-on-light);
             padding: 16px; font-weight: 800;
-            font-size: 0.95rem; letter-spacing: 0.5px;
-            cursor: pointer; transition: opacity 0.2s, transform 0.15s;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem; letter-spacing: 0.3px;
+            cursor: pointer; transition: transform 0.12s, box-shadow 0.12s;
         }
-        #btn-next:hover { opacity: 0.88; }
-        #btn-next:active { transform: scale(0.97); }
+        #btn-next:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 0 var(--shadow-on-light); }
 
         #btn-skip {
-            background: none; border: none; color: var(--muted);
+            background: none; border: none; color: var(--ink-soft);
             font-size: 0.78rem; cursor: pointer; padding: 4px 8px;
-            transition: color 0.2s; letter-spacing: 0.5px;
+            font-weight: 600; letter-spacing: 0.5px;
         }
-        #btn-skip:hover { color: #888; }
         #btn-skip.hidden { visibility: hidden; pointer-events: none; }
 
-        .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-bottom: 48px; }
-        .logo-video {
-            width: 260px; max-width: 78vw; height: auto;
-            border-radius: 18px;
-            display: block;
-            background: #000;
+        /* Slide 1 — hero */
+        .logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 40px; }
+        .logo-frame {
+            width: 250px; max-width: 74vw;
+            padding: 10px;
+            transform: rotate(-3deg);
+            animation: frame-in 0.7s cubic-bezier(.2,.9,.2,1.3) both;
         }
-        .logo-version { color: var(--muted); font-size: 0.68rem; letter-spacing: 3px; }
+        .logo-video { width: 100%; height: auto; display: block; background: #000; }
+        .tag-new {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px;
+            background: var(--ink); color: #fff;
+            border: 2px solid var(--ink);
+            box-shadow: 3px 3px 0 0 var(--shadow-on-light);
+            padding: 4px 10px;
+            transform: rotate(4deg) translate(-92px, -18px);
+            display: inline-block;
+            animation: pop-in 0.5s 0.5s cubic-bezier(.2,.9,.2,1.4) both;
+        }
+        .logo-version { color: var(--ink-faint); font-size: 0.66rem; letter-spacing: 3px; margin-top: 16px; font-weight: 600; }
+
+        @keyframes frame-in {
+            from { opacity: 0; transform: rotate(-10deg) scale(0.85) translateY(20px); }
+            to   { opacity: 1; transform: rotate(-3deg) scale(1) translateY(0); }
+        }
+        @keyframes pop-in {
+            0%   { opacity: 0; transform: rotate(4deg) translate(-92px, -18px) scale(0.4); }
+            70%  { opacity: 1; transform: rotate(4deg) translate(-92px, -18px) scale(1.12); }
+            100% { opacity: 1; transform: rotate(4deg) translate(-92px, -18px) scale(1); }
+        }
+
         .slide1-headline {
-            font-size: 1.55rem; font-weight: 800;
-            text-align: center; line-height: 1.3;
-            letter-spacing: -0.5px; margin-bottom: 14px;
+            font-size: 2rem; font-weight: 800;
+            text-align: center; line-height: 1.12;
+            letter-spacing: -0.8px; margin-bottom: 14px;
             max-width: 320px;
         }
-        .slide1-sub { color: #666; font-size: 0.88rem; text-align: center; line-height: 1.7; max-width: 300px; }
+        .slide1-sub { color: var(--ink-soft); font-size: 0.9rem; text-align: center; line-height: 1.65; max-width: 290px; }
 
-        .feature-icon {
-            width: 80px; height: 80px; border-radius: 24px;
-            background: #0a0a0a; border: 1px solid #2a2a2a;
+        /* Slide 2 — personas */
+        .feature-icon.sticker {
+            width: 74px; height: 74px; border-radius: 0;
             display: flex; align-items: center; justify-content: center;
-            margin-bottom: 32px; position: relative;
+            margin-bottom: 30px;
+            transform: rotate(-4deg);
         }
-        .feature-icon::after {
-            content: '';
-            position: absolute; inset: -1px; border-radius: 24px;
-            background: linear-gradient(135deg, var(--accent-dim), transparent 60%);
+        .feature-icon svg { width: 34px; height: 34px; }
+        .feature-label {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--ink); font-size: 0.7rem; font-weight: 700;
+            letter-spacing: 3px; text-transform: uppercase; margin-bottom: 10px;
         }
-        .feature-icon svg { width: 36px; height: 36px; position: relative; z-index: 1; }
-        .feature-label { color: var(--accent); font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
         .feature-title {
-            font-size: 1.75rem; font-weight: 800;
-            text-align: center; letter-spacing: -0.5px;
-            line-height: 1.2; margin-bottom: 16px; max-width: 300px;
+            font-size: 1.9rem; font-weight: 800;
+            text-align: center; letter-spacing: -0.8px;
+            line-height: 1.1; margin-bottom: 22px; max-width: 300px;
         }
-        .feature-desc { color: #666; font-size: 0.88rem; text-align: center; line-height: 1.75; max-width: 300px; }
+        .feature-desc { color: var(--ink-soft); font-size: 0.88rem; text-align: center; line-height: 1.7; max-width: 300px; }
 
-        .persona-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 24px; max-width: 320px; }
+        .persona-pills { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 26px; max-width: 320px; }
         .pill {
-            background: #0d0d0d; border: 1px solid #2a2a2a;
-            border-radius: 20px; padding: 7px 14px;
-            font-size: 0.75rem; color: #888; transition: 0.2s; cursor: default;
+            font-family: 'Space Grotesk', sans-serif;
+            border: 2px solid var(--ink-faint);
+            padding: 7px 13px;
+            font-size: 0.74rem; font-weight: 600; color: var(--ink-soft);
+            transition: transform 0.35s cubic-bezier(.2,.9,.2,1.4), background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+            transform: scale(0.6) rotate(0deg);
+            opacity: 0;
         }
-        .pill.lit { border-color: var(--accent); color: #000; background: var(--accent); }
+        .pill.lit {
+            border-color: var(--ink); color: #fff; background: var(--ink);
+            box-shadow: 3px 3px 0 0 var(--shadow-on-light);
+            opacity: 1;
+        }
+        .pill:nth-child(odd).lit { transform: scale(1) rotate(-3deg); }
+        .pill:nth-child(even).lit { transform: scale(1) rotate(2deg); }
 
-        .cap-list { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; width: 100%; max-width: 320px; }
-        .cap-item {
+        /* Slide 3 — capabilities */
+        .cap-list { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; width: 100%; max-width: 320px; }
+        .cap-item.sticker {
             display: flex; align-items: center; gap: 14px;
-            background: #0a0a0a; border: 1px solid #1a1a1a;
-            border-radius: 14px; padding: 14px 16px;
+            padding: 14px 16px;
         }
+        .cap-item:nth-child(1) { transform: rotate(-1.4deg); }
+        .cap-item:nth-child(2) { transform: rotate(1.2deg); }
+        .cap-item:nth-child(3) { transform: rotate(-1deg); }
         .cap-item-icon {
-            width: 36px; height: 36px; border-radius: 10px;
-            background: #111; border: 1px solid #2a2a2a;
+            width: 38px; height: 38px;
+            border: 2px solid #ffffff;
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
-        .cap-item-icon svg { width: 18px; height: 18px; }
+        .cap-item-icon svg { width: 19px; height: 19px; }
         .cap-item-text { font-size: 0.83rem; color: #ccc; line-height: 1.4; }
-        .cap-item-text strong { color: var(--text); display: block; margin-bottom: 2px; }
+        .cap-item-text strong { font-family: 'Space Grotesk', sans-serif; color: #ffffff; display: block; margin-bottom: 2px; font-size: 0.92rem; }
 
-        .ready-glow {
-            width: 110px; height: 110px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
-            display: flex; align-items: center; justify-content: center;
-            margin-bottom: 32px; position: relative;
-        }
-        .ready-glow::before {
-            content: ''; position: absolute; inset: 8px;
-            border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.3);
-            animation: spin-slow 8s linear infinite;
-        }
-        .ready-glow::after {
-            content: ''; position: absolute; inset: 20px;
-            border-radius: 50%; border: 1px dashed rgba(255,255,255,0.15);
-            animation: spin-slow 14s linear infinite reverse;
+        /* Slide 4 — ready: rotating stamp signature */
+        .stamp-wrap { width: 168px; height: 168px; position: relative; margin-bottom: 32px; }
+        .stamp-ring {
+            position: absolute; inset: 0; border-radius: 50%;
+            animation: spin-slow 16s linear infinite;
         }
         @keyframes spin-slow { to { transform: rotate(360deg); } }
-        .ready-core {
-            width: 68px; height: 68px; border-radius: 50%;
-            border: 2px solid var(--accent);
-            background: #0a0a0a;
-            display: flex; align-items: center; justify-content: center;
-            position: relative; z-index: 1;
-            box-shadow: 0 0 24px var(--accent-glow);
-        }
-        .ready-core svg { width: 30px; height: 30px; }
-        .ready-title { font-size: 2rem; font-weight: 900; text-align: center; letter-spacing: -0.5px; margin-bottom: 12px; }
-        .ready-title span { color: var(--accent); }
-        .ready-sub { color: #555; font-size: 0.85rem; text-align: center; line-height: 1.7; max-width: 280px; }
-
-        #boot-screen {
-            position: fixed; inset: 0; z-index: 100;
-            background: #000; display: none;
-            flex-direction: column; align-items: center; justify-content: center; gap: 24px;
-        }
-        #boot-screen.show { display: flex; }
-        .boot-logo-video {
-            width: 220px; max-width: 70vw; height: auto;
-            border-radius: 16px;
-            display: block;
+        .stamp-core {
+            position: absolute; inset: 30px; border-radius: 50%;
+            border: 3px solid var(--ink);
             background: #000;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 6px 6px 0 0 var(--shadow-on-dark);
         }
-        .boot-lines { display: flex; flex-direction: column; gap: 8px; width: 240px; }
-        .boot-line {
-            display: flex; align-items: center; gap: 10px;
-            color: #333; font-size: 0.72rem; letter-spacing: 1px; transition: color 0.3s;
-        }
-        .boot-line.done { color: var(--accent); }
-        .boot-line .bl-dot { width: 6px; height: 6px; border-radius: 50%; background: #222; flex-shrink: 0; transition: background 0.3s; }
-        .boot-line.done .bl-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-        .boot-bar-wrap { width: 200px; height: 2px; background: #111; border-radius: 2px; overflow: hidden; }
-        .boot-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; transition: width 0.25s ease; box-shadow: 0 0 8px var(--accent); }
+        .stamp-core svg { width: 34px; height: 34px; }
 
-        .notice-card {
-            margin-top: 24px; width: 100%; max-width: 320px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 16px; padding: 14px 16px;
+        .ready-title { font-size: 2.15rem; font-weight: 800; text-align: center; letter-spacing: -0.9px; line-height: 1.05; margin-bottom: 12px; }
+        .ready-sub { color: var(--ink-soft); font-size: 0.87rem; text-align: center; line-height: 1.7; max-width: 280px; margin-bottom: 22px; }
+
+        .notice-card.sticker {
+            width: 100%; max-width: 320px;
+            padding: 14px 16px;
+            transform: rotate(0.6deg);
         }
         .notice-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
         .notice-header svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .notice-header span { color: #ddd; font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-        .notice-body { color: #777; font-size: 0.78rem; line-height: 1.7; }
-        .notice-body strong { color: #bbb; }
+        .notice-header span { font-family: 'Space Grotesk', sans-serif; color: #ddd; font-size: 0.7rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+        .notice-body { color: #888; font-size: 0.78rem; line-height: 1.7; }
+        .notice-body strong { color: #ddd; }
         .notice-link {
             display: inline-block; margin-top: 6px;
-            color: var(--accent); font-size: 0.78rem;
-            text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3);
-            transition: border-color 0.2s;
+            color: #ffffff; font-size: 0.78rem; font-weight: 600;
+            text-decoration: none; border-bottom: 2px solid #ffffff;
         }
-        .notice-link:hover { border-color: var(--accent); }
+
+        /* Boot screen */
+        #boot-screen {
+            position: fixed; inset: 0; z-index: 100;
+            background: #fff; display: none;
+            flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+        }
+        #boot-screen.show { display: flex; }
+        .boot-logo-frame.sticker { width: 200px; max-width: 66vw; padding: 8px; transform: rotate(-2deg); }
+        .boot-logo-video { width: 100%; height: auto; display: block; background: #000; }
+        .boot-lines { display: flex; flex-direction: column; gap: 10px; width: 250px; }
+        .boot-line {
+            display: flex; align-items: center; gap: 10px;
+            color: var(--ink-faint); font-size: 0.73rem; font-weight: 600; letter-spacing: 0.6px; transition: color 0.3s;
+        }
+        .boot-line.done { color: var(--ink); }
+        .boot-line .bl-box { width: 12px; height: 12px; border: 2px solid #ddd; flex-shrink: 0; transition: 0.3s; }
+        .boot-line.done .bl-box { background: var(--ink); border-color: var(--ink); box-shadow: 2px 2px 0 0 var(--shadow-on-light); }
+        .boot-bar-wrap { width: 220px; height: 8px; border: 2px solid var(--ink); background: #fff; }
+        .boot-bar { height: 100%; width: 0%; background: var(--ink); transition: width 0.25s ease; }
 
         #chrome-banner {
             position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-            background: #0d0d0d; border-bottom: 1px solid #2a2a2a;
+            background: #000; border-bottom: 3px solid #000;
             padding: 12px 16px; display: none; align-items: center; gap: 12px;
         }
         #chrome-banner.show { display: flex; }
-        .chrome-banner-icon { flex-shrink: 0; }
         .chrome-banner-icon svg { width: 22px; height: 22px; display: block; }
         .chrome-banner-text { flex: 1; font-size: 0.75rem; color: #aaa; line-height: 1.4; }
-        .chrome-banner-text strong { color: #fff; display: block; margin-bottom: 2px; }
+        .chrome-banner-text strong { font-family: 'Space Grotesk', sans-serif; color: #fff; display: block; margin-bottom: 2px; }
         .chrome-banner-btn {
-            background: var(--accent); color: #000;
-            border: none; border-radius: 10px;
-            padding: 8px 14px; font-size: 0.75rem;
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--ink); color: #fff;
+            border: 2px solid var(--ink);
+            box-shadow: 3px 3px 0 0 var(--shadow-on-light);
+            padding: 7px 13px; font-size: 0.75rem;
             font-weight: 800; cursor: pointer; white-space: nowrap; flex-shrink: 0;
         }
     </style>
@@ -246,15 +288,18 @@
 
     <div class="slide active" data-slide="0">
         <div class="logo-wrap">
-            <video class="logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
-            <div class="logo-version">v3.0.0 &nbsp;·&nbsp; BY VLAD</div>
+            <div class="logo-frame sticker">
+                <video class="logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
+            </div>
+            <span class="tag-new">AI OS · V3</span>
+            <div class="logo-version">BY VLAD</div>
         </div>
-        <div class="slide1-headline">Your AI, built different.</div>
+        <div class="slide1-headline">Your AI,<br>built different.</div>
         <div class="slide1-sub">Fast responses, multiple personas, and a knowledge engine that goes well beyond basic chat.</div>
     </div>
 
     <div class="slide" data-slide="1">
-        <div class="feature-icon">
+        <div class="feature-icon sticker">
             <svg viewBox="0 0 36 36" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                 <circle cx="18" cy="13" r="5"/>
                 <path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12"/>
@@ -262,7 +307,7 @@
             </svg>
         </div>
         <div class="feature-label">Mode system</div>
-        <div class="feature-title">10 Personas, one AI</div>
+        <div class="feature-title">10 Personas,<br>one AI</div>
         <div class="feature-desc">Switch between modes on the fly. SONIX adapts its tone, style, and depth to how you need it right now.</div>
         <div class="persona-pills" id="persona-pills">
             <div class="pill">Default</div>
@@ -282,7 +327,7 @@
         <div class="feature-label">Built-in engines</div>
         <div class="feature-title">More than chat</div>
         <div class="cap-list">
-            <div class="cap-item">
+            <div class="cap-item sticker">
                 <div class="cap-item-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                         <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
@@ -290,7 +335,7 @@
                 </div>
                 <div class="cap-item-text"><strong>Advanced Math</strong>Algebra, calculus, stats, quadratics, finance</div>
             </div>
-            <div class="cap-item">
+            <div class="cap-item sticker">
                 <div class="cap-item-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -298,7 +343,7 @@
                 </div>
                 <div class="cap-item-text"><strong>Live Research</strong>Wikipedia + DuckDuckGo lookups in real time</div>
             </div>
-            <div class="cap-item">
+            <div class="cap-item sticker">
                 <div class="cap-item-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -310,17 +355,25 @@
     </div>
 
     <div class="slide" data-slide="3">
-        <div class="ready-glow">
-            <div class="ready-core">
-                <svg viewBox="0 0 30 30" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
+        <div class="stamp-wrap">
+            <svg class="stamp-ring" viewBox="0 0 168 168">
+                <defs>
+                    <path id="stamp-circle" d="M 84,84 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0" />
+                </defs>
+                <text font-family="Space Grotesk, sans-serif" font-size="11" font-weight="700" letter-spacing="3" fill="#000000">
+                    <textPath href="#stamp-circle" startOffset="0%">SONIX · READY TO GO · SONIX · READY TO GO ·</textPath>
+                </text>
+            </svg>
+            <div class="stamp-core">
+                <svg viewBox="0 0 30 30" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round">
                     <polyline points="6 15 12 21 24 9"/>
                 </svg>
             </div>
         </div>
-        <div class="ready-title">SONIX is <span>ready.</span></div>
+        <div class="ready-title">SONIX is ready.</div>
         <div class="ready-sub">Sign in or continue as a guest. Your conversations stay private and on-device.</div>
 
-        <div class="notice-card">
+        <div class="notice-card sticker">
             <div class="notice-header">
                 <svg viewBox="0 0 20 20" fill="none" stroke="#ddd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M10 2L2 17h16L10 2z"/>
@@ -330,10 +383,9 @@
                 <span>Early Access Notice</span>
             </div>
             <div class="notice-body">
-                SONIX is currently in <strong>early access</strong>. The server is temporarily unavailable — but the local model is ready to use.<br><br>
-                <strong>Do not sign in with your personal Gmail.</strong> Some features are still being built and may not work as expected.<br><br>
+                SONIX is currently in <strong>early access</strong> — some features are still being built and may change.<br><br>
                 Found a bug or have feedback?
-                <a class="notice-link" href="mailto:sonixhub@gmail.com">Send a message to sonixhub@gmail.com</a>
+                <a class="notice-link" href="mailto:sonixhub@gmail.com">Message sonixhub@gmail.com</a>
             </div>
         </div>
     </div>
@@ -347,12 +399,14 @@
 </div>
 
 <div id="boot-screen">
-    <video class="boot-logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
+    <div class="boot-logo-frame sticker">
+        <video class="boot-logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
+    </div>
     <div class="boot-lines">
-        <div class="boot-line" id="bl-0"><div class="bl-dot"></div>Loading model engine...</div>
-        <div class="boot-line" id="bl-1"><div class="bl-dot"></div>Initialising personas...</div>
-        <div class="boot-line" id="bl-2"><div class="bl-dot"></div>Connecting knowledge base...</div>
-        <div class="boot-line" id="bl-3"><div class="bl-dot"></div>Ready.</div>
+        <div class="boot-line" id="bl-0"><div class="bl-box"></div>Loading model engine...</div>
+        <div class="boot-line" id="bl-1"><div class="bl-box"></div>Initialising personas...</div>
+        <div class="boot-line" id="bl-2"><div class="bl-box"></div>Connecting knowledge base...</div>
+        <div class="boot-line" id="bl-3"><div class="bl-box"></div>Ready.</div>
     </div>
     <div class="boot-bar-wrap"><div class="boot-bar" id="boot-bar"></div></div>
 </div>
@@ -398,7 +452,7 @@
     function animatePills() {
         const pills = document.querySelectorAll('#persona-pills .pill');
         pills.forEach(p => p.classList.remove('lit'));
-        pills.forEach((p, i) => { setTimeout(() => p.classList.add('lit'), i * 80); });
+        pills.forEach((p, i) => { setTimeout(() => p.classList.add('lit'), i * 90); });
     }
 
     btnNext.addEventListener('click', () => {
