@@ -86,23 +86,23 @@
 
     <div class="card" data-keywords="sign up register account create">
         <div class="card-head"><div class="card-title">Create an Account / Log In</div><span class="badge safe">Safe</span></div>
-        <div class="card-desc">Creates a local account so your chats and settings are saved on this device. Nothing is sent anywhere — SONIX has no server.</div>
-        <ol class="card-steps"><li>Enter an email and password (used only to identify you on this device — not verified or sent anywhere)</li><li>Choose "Register" for a new account or "Log In" if you already have one</li></ol>
+        <div class="card-desc">Creates an account so your chats and settings can sync across devices. Sign in with email (a 6-digit code is sent to verify it's really you — no password to remember) or with Google.</div>
+        <ol class="card-steps"><li>Enter your email, or tap "Continue with Google"</li><li>If using email, check your inbox for a 6-digit code and enter it to finish signing in</li></ol>
     </div>
 
     <div class="card" data-keywords="guest continue as guest no account">
         <div class="card-head"><div class="card-title">Continue as Guest</div><span class="badge caution">Caution</span></div>
-        <div class="card-desc">Lets you use SONIX without an account. The trade-off: guest chats are <b>not saved</b> — closing the app loses them.</div>
+        <div class="card-desc">Lets you use SONIX without an account. The trade-off: guest chats live only in this browser's local storage and are <b>not synced or backed up</b> — clearing browser data or switching devices loses them.</div>
     </div>
 
     <div class="card" data-keywords="2fa two factor authentication pin pattern fingerprint biometric verification code security login">
         <div class="card-head"><div class="card-title">Two-Factor Authentication (2FA)</div><span class="badge safe">Safe</span></div>
-        <div class="card-desc">Adds a second step after your password, in Settings → System &amp; Security → 2FA Verification. Pick one method:</div>
+        <div class="card-desc">Adds a second step after signing in, in Settings → System &amp; Security → 2FA Verification. Pick one method:</div>
         <ol class="card-steps">
             <li><b>PIN Code</b> — a 4-digit code you set and re-enter at login</li>
             <li><b>Pattern Lock</b> — draw a connect-the-dots pattern (like Android's lock screen)</li>
             <li><b>Fingerprint / Face</b> — uses your device's own biometric hardware (Face ID / Touch ID / Windows Hello) through the browser. This never leaves your device.</li>
-            <li><b>Verification Code</b> — since SONIX has no server to email a real code, a 6-digit code is shown right on your screen at login and you type it back in. It's still a genuine second step, just delivered on-device instead of by email.</li>
+            <li><b>Verification Code</b> — a 6-digit code shown right on your screen at login, which you type back in. It's still a genuine second step, just delivered on-device instead of by email.</li>
         </ol>
     </div>
 
@@ -184,12 +184,12 @@
 
     <div class="card" data-keywords="export chat download backup txt file">
         <div class="card-head"><div class="card-title">Export Chat</div><span class="badge safe">Safe</span></div>
-        <div class="card-desc">Downloads the whole conversation as a plain <code>.txt</code> file to your device. This is your own personal backup — SONIX keeps no copy of it once it's downloaded.</div>
+        <div class="card-desc">Downloads the whole conversation as a plain <code>.txt</code> file to your device — a personal copy you control, independent of whatever is synced or stored elsewhere.</div>
     </div>
 
     <div class="card" data-keywords="delete session remove permanently">
         <div class="card-head"><div class="card-title">Delete</div><span class="badge risk">Careful</span></div>
-        <div class="card-desc">Moves a session to a temporary "deleted" state. Confirm carefully — this removes it from your device's storage.</div>
+        <div class="card-desc">Moves a session to a temporary "deleted" state. Confirm carefully — for signed-in accounts this also removes it from the synced database, not just this device.</div>
     </div>
 
     <div class="card" data-keywords="search chat find word conversation match">
@@ -217,26 +217,26 @@
 
     <div class="card" data-keywords="custom model add api key link endpoint connect">
         <div class="card-head"><div class="card-title">Adding Your Own Model</div><span class="badge caution">Read First</span></div>
-        <div class="card-desc">In System Models → "Add Custom Model," paste an API link (required) and a key (only if that API needs one).</div>
+        <div class="card-desc">In System Models → "Add Custom Model," paste an API link (required) and a key (only if that API needs one). This key stays local to your browser — it is never synced to our servers, even if you're signed in.</div>
         <ol class="card-steps"><li>The link is tested automatically in the background right after saving</li><li>A green dot means connected and working; red means the last test failed, with the reason shown</li><li>A "Network/CORS error" specifically means the browser blocked reading the response — this can happen even when the API genuinely works, because it usually means the server doesn't allow cross-site requests. That's a setting on the API's side, not something fixable from here.</li></ol>
     </div>
 
     <!-- ============ SETTINGS & SECURITY ============ -->
     <div class="section-title" id="settings">Settings &amp; Security</div>
 
-    <div class="card" data-keywords="app details storage local device server">
+    <div class="card" data-keywords="app details storage local device server sync account">
         <div class="card-head"><div class="card-title">App Details</div><span class="badge safe">Safe</span></div>
-        <div class="card-desc">Explains exactly how SONIX stores your data (locally, no server) and what that means practically — tap the "ℹ Where is my data stored?" button to expand it.</div>
+        <div class="card-desc">Explains exactly how SONIX stores your data (locally as a guest, synced to our database when signed in) and what that means practically — tap the "ℹ Where is my data stored?" button to expand it.</div>
     </div>
 
     <div class="card" data-keywords="export all data import backup json">
         <div class="card-head"><div class="card-title">Export / Import All Data</div><span class="badge safe">Safe</span></div>
-        <div class="card-desc">Export All Data saves everything (sessions, settings, models) as one file you control. Import Data restores from that file — useful when switching devices, since nothing syncs automatically.</div>
+        <div class="card-desc">Export All Data saves everything (sessions, settings, models) as one file you control. Import Data restores from that file — useful when switching devices or browsers, or as a personal backup on top of whatever is already synced.</div>
     </div>
 
     <div class="card" data-keywords="clear chat delete all data wipe">
         <div class="card-head"><div class="card-title">Clear Current Chat / Clear All Data</div><span class="badge risk">Careful</span></div>
-        <div class="card-desc">Permanently erases what it says — the current conversation, or literally everything SONIX has stored on this device. There's no undo once confirmed.</div>
+        <div class="card-desc">Permanently erases what it says — the current conversation, or literally everything SONIX has stored for you. For signed-in accounts this also clears the synced copy in our database. There's no undo once confirmed.</div>
     </div>
 
     <!-- ============ SAFETY NOTES ============ -->
@@ -247,14 +247,14 @@
         <div class="card-desc">An <b>API key</b> works like a password: anyone who has it can use your account and run up your usage or charges. Never share it, and never paste one someone told you to keep secret. An <b>API link</b> alone is usually far less risky to share, since most links don't work without a key too — but avoid sharing a link that has a key baked directly into the URL.</div>
     </div>
 
-    <div class="card" data-keywords="local storage browser data privacy no server safe">
-        <div class="card-head"><div class="card-title">Everything Stays On Your Device</div><span class="badge safe">Safe</span></div>
-        <div class="card-desc">SONIX has no backend server. Chats, settings, custom model keys — all of it lives only in this browser's local storage. Nothing is transmitted anywhere except the direct requests you explicitly trigger (like a custom model call, or a map/research lookup).</div>
+    <div class="card" data-keywords="local storage browser data privacy sync account server database">
+        <div class="card-head"><div class="card-title">Where Your Data Actually Lives</div><span class="badge safe">Safe</span></div>
+        <div class="card-desc"><b>Guest mode:</b> everything stays only in this browser's local storage — nothing is sent anywhere except requests you explicitly trigger (a custom model call, or a map/research lookup).<br><br><b>Signed-in accounts:</b> your conversations and settings are also synced to our database (Cloudflare D1) so you can pick up where you left off on another device. Custom model API keys are the one exception — those always stay local to the browser that added them and are never synced.</div>
     </div>
 
-    <div class="card" data-keywords="clear browser data uninstall lose everything backup">
-        <div class="card-head"><div class="card-title">This Also Means: No Automatic Backup</div><span class="badge caution">Caution</span></div>
-        <div class="card-desc">Clearing your browser's site data, or switching devices/browsers, erases everything with no way to recover it — because there's no server copy to restore from. Use <b>Export All Data</b> or <b>Export Chat</b> periodically if you want a personal backup.</div>
+    <div class="card" data-keywords="clear browser data uninstall lose everything backup guest">
+        <div class="card-head"><div class="card-title">Guest Mode: No Automatic Backup</div><span class="badge caution">Caution</span></div>
+        <div class="card-desc">As a guest, clearing your browser's site data, or switching devices/browsers, erases everything with no way to recover it — there's no synced copy for guest sessions. Signing in protects against this going forward, since your data syncs to our database. Use <b>Export All Data</b> or <b>Export Chat</b> periodically either way if you want a personal backup.</div>
     </div>
 
     <div class="card" data-keywords="sonix core limitations coding not real ai model template">
@@ -262,7 +262,7 @@
         <div class="card-desc">SONIX Core is a pattern-matching engine, not a full language model — its code library covers about a dozen common exercises (FizzBuzz, sorting, etc.) across 10 languages. Ask for something outside that list and it will say so honestly rather than guess. For open-ended coding help, connect a real model under System Models instead.</div>
     </div>
 
-    <footer>SONIX — everything above runs locally in your browser. This guide is a static page and makes no network requests on its own.</footer>
+    <footer>SONIX — guest sessions run entirely in your browser and make no network requests on their own beyond what you trigger. Signed-in sessions sync to our Cloudflare-hosted backend as described above.</footer>
 </div>
 
 <script>
