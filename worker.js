@@ -1,9 +1,9 @@
 /**
  * SONIX BACKEND — Cloudflare Worker
  * ================================================================
- * Handles: email/password signup (with email verification code)+login,
- * Google Sign-In, password reset (via email), and syncing conversations
- * to a real database (D1) instead of only the browser's local storage.
+ * Handles: passwordless email sign-in (6-digit verification code)+login,
+ * Google Sign-In, and syncing conversations to a real database (D1)
+ * instead of only the browser's local storage.
  *
  * SETUP (see the deployment guide for full step-by-step details):
  *   1. Create a D1 database, run schema.sql against it, bind it to
@@ -26,6 +26,7 @@ const FROM_EMAIL = 'SONIX <onboarding@resend.dev>'; // Works immediately, no dom
 
 const CODE_EXPIRY_MS = 10 * 60 * 1000; // verification code valid for 10 minutes
 const MAX_CODE_ATTEMPTS = 5;
+const RESEND_COOLDOWN_MS = 60 * 1000; // FIX: minimum time between codes sent to the same email
 
 // ---------- Small helpers ----------
 
@@ -154,8 +155,6 @@ async function sendEmail(env, to, subject, html) {
 
 // ---------- Route handlers ----------
 
-// STEP 1 of signup: validate input, email a 6-digit code, stash the
-// pending signup (with password already hashed) until it's confirmed.
 // STEP 1: validate email, email a 6-digit code. Works for both brand-new
 // and returning users — we don't reveal which, and account creation happens
 // in STEP 2 only after the code is confirmed.
@@ -164,8 +163,20 @@ async function handleEmailRequest(request, env) {
     if (!email) return json({ error: 'Email is required.' }, 400, env);
     if (!isValidEmail(email)) return json({ error: 'Enter a real email address, e.g. example@gmail.com' }, 400, env);
 
-    const code = generateCode();
     const now = Date.now();
+
+    // FIX: rate-limit resends to the same email so this endpoint can't be
+    // used to email-bomb someone. If a code was already sent recently,
+    // reject instead of sending another.
+    const existing = await env.DB.prepare(
+        'SELECT created_at FROM email_verifications WHERE email = ?'
+    ).bind(email).first();
+    if (existing && (now - existing.created_at) < RESEND_COOLDOWN_MS) {
+        const waitSec = Math.ceil((RESEND_COOLDOWN_MS - (now - existing.created_at)) / 1000);
+        return json({ error: `Please wait ${waitSec}s before requesting another code.` }, 429, env);
+    }
+
+    const code = generateCode();
     const cleanNickname = (nickname || '').trim();
 
     await env.DB.prepare(
@@ -271,7 +282,6 @@ async function handleDeleteAccount(request, env) {
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
     await env.DB.prepare('DELETE FROM conversations WHERE user_id = ?').bind(user.id).run();
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
-    await env.DB.prepare('DELETE FROM password_resets WHERE user_id = ?').bind(user.id).run();
     await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
     return json({ ok: true }, 200, env);
 }
