@@ -3,18 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>SONIX — Welcome</title>
+    <title>SONIX — AI, Reimagined</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #ffffff;
-            --ink: #000000;
-            --ink-soft: #707070;
-            --ink-faint: #b5b5b5;
-            --shadow-on-dark: #000000;
-            --shadow-on-light: #000000;
+            --bg: #05100a;
+            --bg-2: #081a11;
+            --surface: rgba(12, 31, 20, 0.75);
+            --ink: #eafff2;
+            --ink-soft: #8fb3a0;
+            --ink-faint: #4b6a5a;
+            --green: #39ff8a;
+            --green-dim: #1a6b41;
+            --green-deep: #0d3a23;
+            --shadow: rgba(0, 0, 0, 0.8);
+            --glow: rgba(57, 255, 138, 0.4);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -26,395 +31,691 @@
         }
 
         h1, h2, .disp { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
 
-        body::before {
+        /* ===== 3D Terrain & Background Layer ===== */
+        #bg-layer { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); }
+        #terrain-wrap { width: 100vw; height: 100vh; position: absolute; inset: 0; z-index: 1; }
+        
+        /* Subtle Vignette & Scanline Overlay */
+        #bg-layer::after {
             content: '';
-            position: fixed; inset: 0; pointer-events: none; z-index: 0;
-            background: repeating-linear-gradient(
-                0deg, transparent, transparent 2px,
-                rgba(0,0,0,0.035) 2px, rgba(0,0,0,0.035) 4px
-            );
+            position: absolute; inset: 0; pointer-events: none; z-index: 2;
+            background: 
+                radial-gradient(ellipse at center, transparent 30%, rgba(5, 16, 10, 0.85) 90%),
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.2) 2px, rgba(0,0,0,0.2) 4px);
         }
 
-        /* Signature building block: the "sticker" — thick border + hard
-           offset shadow made from a solid duplicate shape sitting behind it.
-           Repeated everywhere for cohesion. */
+        /* ===== Signature Sticker / Glass Card Component ===== */
         .sticker {
             position: relative;
-            border: 3px solid #000;
-            background: #000;
+            border: 2px solid var(--green);
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+            box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.5), inset 0 0 12px rgba(57, 255, 138, 0.05);
+            transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
-        .sticker::before {
-            content: '';
-            position: absolute; inset: 0;
-            background: var(--shadow-on-dark);
-            transform: translate(7px, 7px);
-            z-index: -1;
-            border-radius: inherit;
+        .sticker.solid { background: var(--green); border-color: var(--green); color: #04140c; }
+
+        #app { position: fixed; inset: 0; z-index: 10; }
+
+        /* ===== Top bar / Hamburger (Moved to LEFT) ===== */
+        #topbar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: calc(16px + env(safe-area-inset-top)) 20px 14px;
+            pointer-events: none;
         }
+        #topbar > * { pointer-events: auto; }
 
-        #slides { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; }
+        .brandmark { display: flex; align-items: center; gap: 8px; }
+        .brandmark .dot-mark { width: 9px; height: 9px; background: var(--green); box-shadow: 0 0 10px var(--green); border-radius: 1px; }
+        .brandmark span { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: 2px; font-size: 0.82rem; color: var(--ink); }
 
+        /* Cool Menu Button - Left Side */
+        #hamburger {
+            width: 44px; height: 44px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+            background: var(--surface); border: 2px solid var(--green);
+            box-shadow: 0 0 10px rgba(57, 255, 138, 0.2), 3px 3px 0 0 var(--shadow);
+            cursor: pointer; backdrop-filter: blur(8px);
+            transition: all 0.2s ease;
+        }
+        #hamburger:hover {
+            box-shadow: 0 0 15px var(--glow), 4px 4px 0 0 var(--shadow);
+            transform: translate(-1px, -1px);
+        }
+        #hamburger:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--shadow); }
+        #hamburger span { width: 20px; height: 2px; background: var(--green); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        #hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        #hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+        #hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+        /* ===== Slide-out Menu (Appears from LEFT) ===== */
+        #menu-backdrop {
+            position: fixed; inset: 0; z-index: 50;
+            background: rgba(2, 8, 5, 0.7); backdrop-filter: blur(4px);
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        #menu-backdrop.show { opacity: 1; pointer-events: all; }
+
+        #menu-panel {
+            position: fixed; top: 0; left: 0; bottom: 0; z-index: 51;
+            width: 78%; max-width: 320px;
+            background: rgba(8, 26, 17, 0.92); backdrop-filter: blur(16px);
+            border-right: 2px solid var(--green);
+            padding: calc(28px + env(safe-area-inset-top)) 24px 28px;
+            display: flex; flex-direction: column; gap: 12px;
+            transform: translateX(-100%); transition: transform 0.4s cubic-bezier(.2,.9,.2,1.1);
+            box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+        }
+        #menu-panel.show { transform: translateX(0); }
+
+        .menu-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 2px; color: var(--ink-faint); margin-bottom: 8px; text-transform: uppercase; }
+
+        .menu-btn.sticker {
+            display: flex; align-items: center; gap: 12px;
+            padding: 15px 16px; cursor: pointer; color: var(--ink);
+            font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 0.92rem;
+            opacity: 0; transform: translateX(-24px);
+            animation: menu-item-in 0.4s cubic-bezier(.2,.9,.2,1.2) forwards;
+        }
+        .menu-panel-item:nth-child(1) .menu-btn { animation-delay: 0.05s; }
+        .menu-panel-item:nth-child(2) .menu-btn { animation-delay: 0.13s; }
+        @keyframes menu-item-in { to { opacity: 1; transform: translateX(0); } }
+        
+        .menu-btn.sticker:hover {
+            border-color: #fff;
+            box-shadow: 0 0 15px var(--glow), 4px 4px 0 0 var(--shadow);
+            transform: translateY(-2px);
+        }
+        .menu-btn.sticker:active { transform: translate(2px, 2px); box-shadow: 0 0 0 0 var(--shadow) !important; }
+        .menu-btn .mb-icon { width: 20px; height: 20px; flex-shrink: 0; }
+        .menu-btn .mb-icon svg { width: 100%; height: 100%; }
+        .menu-btn small { display: block; font-family: 'Inter', sans-serif; font-weight: 500; color: var(--ink-soft); font-size: 0.72rem; margin-top: 2px; }
+
+        #menu-footer { margin-top: auto; }
+        #menu-footer .mono { font-size: 0.66rem; color: var(--ink-faint); letter-spacing: 1px; }
+
+        /* ===== Slides ===== */
+        #slides { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; pointer-events: none; }
         .slide {
             position: absolute; inset: 0;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            padding: 40px 26px 118px;
+            padding: 90px 26px 140px;
             opacity: 0; pointer-events: none;
             transition: opacity 0.4s ease, transform 0.5s cubic-bezier(.2,.9,.25,1.2);
             transform: translateY(26px) scale(0.97);
+            overflow-y: auto;
         }
         .slide.active { opacity: 1; pointer-events: all; transform: translateY(0) scale(1); }
         .slide.exit { opacity: 0; pointer-events: none; transform: translateY(-26px) scale(0.97); }
 
+        /* Bottom Controls / Navigation */
         #nav {
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
             padding: 20px 28px calc(20px + env(safe-area-inset-bottom));
-            background: linear-gradient(transparent, #fff 50%);
+            background: linear-gradient(transparent, var(--bg) 70%);
             display: flex; flex-direction: column; align-items: center; gap: 16px;
         }
+        #dots { display: flex; gap: 8px; align-items: center; }
+        .dot { width: 22px; height: 6px; background: var(--green-deep); border: 1.5px solid var(--green-dim); transition: 0.3s; }
+        .dot.active { background: var(--green); border-color: var(--green); box-shadow: 0 0 10px var(--green), 2px 2px 0 0 var(--shadow); }
 
-        #dots { display: flex; gap: 7px; align-items: center; }
-        .dot { width: 22px; height: 6px; background: #e5e5e5; border: 1.5px solid #ddd; transition: 0.3s; }
-        .dot.active { background: var(--ink); border-color: var(--ink); box-shadow: 3px 3px 0 0 #000; }
-
+        /* Cool primary button redesign */
         #btn-next {
             width: 100%; max-width: 360px;
-            background: var(--ink); color: #fff;
-            border: 3px solid var(--ink);
-            box-shadow: 6px 6px 0 0 var(--shadow-on-light);
+            background: var(--green); color: #04140c;
+            border: 2px solid var(--green);
+            box-shadow: 0 0 20px rgba(57, 255, 138, 0.4), 4px 4px 0 0 var(--shadow);
             padding: 16px; font-weight: 800;
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 1rem; letter-spacing: 0.3px;
-            cursor: pointer; transition: transform 0.12s, box-shadow 0.12s;
+            font-size: 1.05rem; letter-spacing: 0.5px; text-transform: uppercase;
+            cursor: pointer; transition: all 0.15s ease;
+            position: relative; overflow: hidden;
         }
-        #btn-next:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 0 var(--shadow-on-light); }
+        #btn-next:hover {
+            background: #50ff9a;
+            box-shadow: 0 0 25px rgba(57, 255, 138, 0.6), 6px 6px 0 0 var(--shadow);
+            transform: translate(-2px, -2px);
+        }
+        #btn-next:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--shadow); }
 
         #btn-skip {
             background: none; border: none; color: var(--ink-soft);
-            font-size: 0.78rem; cursor: pointer; padding: 4px 8px;
-            font-weight: 600; letter-spacing: 0.5px;
+            font-size: 0.8rem; cursor: pointer; padding: 4px 8px;
+            font-weight: 600; letter-spacing: 0.5px; transition: color 0.2s;
         }
+        #btn-skip:hover { color: var(--green); }
         #btn-skip.hidden { visibility: hidden; pointer-events: none; }
 
-        /* Slide 1 — hero */
-        .logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 40px; }
-        .logo-frame {
-            width: 250px; max-width: 74vw;
-            padding: 10px;
-            transform: rotate(-3deg);
+        /* Slide 1 — Hero */
+        .logo-frame.sticker {
+            width: 118px; height: 118px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            transform: rotate(-3deg); margin-bottom: 30px;
             animation: frame-in 0.7s cubic-bezier(.2,.9,.2,1.3) both;
+            box-shadow: 0 0 30px rgba(57, 255, 138, 0.2), 6px 6px 0 0 var(--shadow);
         }
-        .logo-video { width: 100%; height: auto; display: block; background: #fff; }
-        .logo-frame.sticker { background: #fff; }
+        .logo-frame svg { width: 56px; height: 56px; filter: drop-shadow(0 0 8px var(--green)); }
         .tag-new {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px;
-            background: var(--ink); color: #fff;
-            border: 2px solid var(--ink);
-            box-shadow: 3px 3px 0 0 var(--shadow-on-light);
+            background: var(--green); color: #04140c;
+            border: 2px solid var(--green);
+            box-shadow: 3px 3px 0 0 var(--shadow);
             padding: 4px 10px;
-            transform: rotate(4deg) translate(-92px, -18px);
-            display: inline-block;
+            transform: rotate(4deg) translate(52px, -108px);
+            display: inline-block; position: relative;
             animation: pop-in 0.5s 0.5s cubic-bezier(.2,.9,.2,1.4) both;
         }
-        .logo-version { color: var(--ink-faint); font-size: 0.66rem; letter-spacing: 3px; margin-top: 16px; font-weight: 600; }
-
         @keyframes frame-in {
             from { opacity: 0; transform: rotate(-10deg) scale(0.85) translateY(20px); }
             to   { opacity: 1; transform: rotate(-3deg) scale(1) translateY(0); }
         }
         @keyframes pop-in {
-            0%   { opacity: 0; transform: rotate(4deg) translate(-92px, -18px) scale(0.4); }
-            70%  { opacity: 1; transform: rotate(4deg) translate(-92px, -18px) scale(1.12); }
-            100% { opacity: 1; transform: rotate(4deg) translate(-92px, -18px) scale(1); }
+            0%   { opacity: 0; transform: rotate(4deg) translate(52px, -108px) scale(0.4); }
+            70%  { opacity: 1; transform: rotate(4deg) translate(52px, -108px) scale(1.12); }
+            100% { opacity: 1; transform: rotate(4deg) translate(52px, -108px) scale(1); }
         }
 
         .slide1-headline {
-            font-size: 2rem; font-weight: 800;
+            font-size: 2.2rem; font-weight: 800;
             text-align: center; line-height: 1.12;
             letter-spacing: -0.8px; margin-bottom: 14px;
-            max-width: 320px;
+            max-width: 340px; text-shadow: 0 2px 10px rgba(0,0,0,0.8);
         }
-        .slide1-sub { color: var(--ink-soft); font-size: 0.9rem; text-align: center; line-height: 1.65; max-width: 290px; }
+        .slide1-headline .accent { color: var(--green); text-shadow: 0 0 15px rgba(57, 255, 138, 0.4); }
+        .slide1-sub { color: var(--ink-soft); font-size: 0.92rem; text-align: center; line-height: 1.65; max-width: 300px; text-shadow: 0 1px 5px rgba(0,0,0,0.8); }
 
-        /* Slide 2 — personas */
-        .feature-icon.sticker {
-            width: 74px; height: 74px; border-radius: 0;
-            display: flex; align-items: center; justify-content: center;
-            margin-bottom: 30px;
-            transform: rotate(-4deg);
-        }
-        .feature-icon svg { width: 34px; height: 34px; }
-        .feature-label {
-            font-family: 'Space Grotesk', sans-serif;
-            color: var(--ink); font-size: 0.7rem; font-weight: 700;
-            letter-spacing: 3px; text-transform: uppercase; margin-bottom: 10px;
-        }
-        .feature-title {
-            font-size: 1.9rem; font-weight: 800;
-            text-align: center; letter-spacing: -0.8px;
-            line-height: 1.1; margin-bottom: 22px; max-width: 300px;
-        }
-        .feature-desc { color: var(--ink-soft); font-size: 0.88rem; text-align: center; line-height: 1.7; max-width: 300px; }
+        /* Slide 2 — Purpose */
+        .feature-label { font-family: 'JetBrains Mono', monospace; color: var(--green); font-size: 0.68rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 10px; }
+        .feature-title { font-size: 1.8rem; font-weight: 800; text-align: center; letter-spacing: -0.7px; line-height: 1.15; margin-bottom: 10px; max-width: 310px; }
+        .feature-desc { color: var(--ink-soft); font-size: 0.88rem; text-align: center; line-height: 1.65; max-width: 300px; margin-bottom: 24px; }
 
-        .persona-pills { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 26px; max-width: 320px; }
-        .pill {
-            font-family: 'Space Grotesk', sans-serif;
-            border: 2px solid var(--ink-faint);
-            padding: 7px 13px;
-            font-size: 0.74rem; font-weight: 600; color: var(--ink-soft);
-            transition: transform 0.35s cubic-bezier(.2,.9,.2,1.4), background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
-            transform: scale(0.6) rotate(0deg);
-            opacity: 0;
-        }
-        .pill.lit {
-            border-color: var(--ink); color: #fff; background: var(--ink);
-            box-shadow: 3px 3px 0 0 var(--shadow-on-light);
-            opacity: 1;
-        }
-        .pill:nth-child(odd).lit { transform: scale(1) rotate(-3deg); }
-        .pill:nth-child(even).lit { transform: scale(1) rotate(2deg); }
-
-        /* Slide 3 — capabilities */
-        .cap-list { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; width: 100%; max-width: 320px; }
+        .cap-list { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 340px; }
         .cap-item.sticker {
-            display: flex; align-items: center; gap: 14px;
-            padding: 14px 16px;
+            display: flex; align-items: flex-start; gap: 13px;
+            padding: 14px 15px;
         }
-        .cap-item:nth-child(1) { transform: rotate(-1.4deg); }
-        .cap-item:nth-child(2) { transform: rotate(1.2deg); }
-        .cap-item:nth-child(3) { transform: rotate(-1deg); }
+        .cap-item:hover { transform: translateY(-2px) scale(1.01) !important; border-color: #fff; }
+        .cap-item:nth-child(1) { transform: rotate(-1deg); }
+        .cap-item:nth-child(2) { transform: rotate(0.8deg); }
+        .cap-item:nth-child(3) { transform: rotate(-0.6deg); }
         .cap-item-icon {
-            width: 38px; height: 38px;
-            border: 2px solid #ffffff;
+            width: 36px; height: 36px;
+            border: 2px solid var(--green);
+            background: var(--green-deep);
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            box-shadow: 0 0 8px rgba(57, 255, 138, 0.2);
         }
-        .cap-item-icon svg { width: 19px; height: 19px; }
-        .cap-item-text { font-size: 0.83rem; color: #ccc; line-height: 1.4; }
-        .cap-item-text strong { font-family: 'Space Grotesk', sans-serif; color: #ffffff; display: block; margin-bottom: 2px; font-size: 0.92rem; }
+        .cap-item-icon svg { width: 18px; height: 18px; }
+        .cap-item-text { font-size: 0.82rem; color: var(--ink-soft); line-height: 1.45; }
+        .cap-item-text strong { font-family: 'Space Grotesk', sans-serif; color: var(--ink); display: block; margin-bottom: 2px; font-size: 0.92rem; }
 
-        /* Slide 4 — ready: rotating stamp signature */
-        .stamp-wrap { width: 168px; height: 168px; position: relative; margin-bottom: 32px; }
-        .stamp-ring {
-            position: absolute; inset: 0; border-radius: 50%;
-            animation: spin-slow 16s linear infinite;
+        /* Slide 3 — Warning & Feedback */
+        .warn-icon.sticker {
+            width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;
+            margin-bottom: 20px; transform: rotate(-2deg);
+            box-shadow: 0 0 15px rgba(57, 255, 138, 0.3), 4px 4px 0 0 var(--shadow);
         }
-        @keyframes spin-slow { to { transform: rotate(360deg); } }
-        .stamp-core {
-            position: absolute; inset: 30px; border-radius: 50%;
-            border: 3px solid var(--ink);
-            background: #000;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 6px 6px 0 0 var(--shadow-on-dark);
-        }
-        .stamp-core svg { width: 34px; height: 34px; }
+        .warn-icon svg { width: 28px; height: 28px; }
+        .ready-title { font-size: 1.7rem; font-weight: 800; text-align: center; letter-spacing: -0.6px; line-height: 1.15; margin-bottom: 10px; max-width: 300px; }
+        .ready-sub { color: var(--ink-soft); font-size: 0.85rem; text-align: center; line-height: 1.6; max-width: 290px; margin-bottom: 20px; }
 
-        .ready-title { font-size: 2.15rem; font-weight: 800; text-align: center; letter-spacing: -0.9px; line-height: 1.05; margin-bottom: 12px; }
-        .ready-sub { color: var(--ink-soft); font-size: 0.87rem; text-align: center; line-height: 1.7; max-width: 280px; margin-bottom: 22px; }
+        .notice-card.sticker { width: 100%; max-width: 340px; padding: 14px 16px; transform: rotate(0.5deg); margin-bottom: 18px; }
+        .notice-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .notice-header svg { width: 15px; height: 15px; flex-shrink: 0; }
+        .notice-header span { font-family: 'JetBrains Mono', monospace; color: var(--green); font-size: 0.66rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+        .notice-body { color: var(--ink-soft); font-size: 0.78rem; line-height: 1.65; }
 
-        .notice-card.sticker {
-            width: 100%; max-width: 320px;
-            padding: 14px 16px;
-            transform: rotate(0.6deg);
+        .feedback-card.sticker { width: 100%; max-width: 340px; padding: 16px; transform: rotate(-0.4deg); }
+        .feedback-card label { font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 1.5px; color: var(--green); text-transform: uppercase; display: block; margin-bottom: 8px; }
+        .feedback-card textarea {
+            width: 100%; min-height: 78px; resize: vertical;
+            background: rgba(5, 16, 10, 0.8); border: 2px solid var(--green-dim);
+            color: var(--ink); font-family: 'Inter', sans-serif; font-size: 0.85rem;
+            padding: 10px; outline: none; transition: border-color 0.2s;
         }
-        .notice-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-        .notice-header svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .notice-header span { font-family: 'Space Grotesk', sans-serif; color: #ddd; font-size: 0.7rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
-        .notice-body { color: #888; font-size: 0.78rem; line-height: 1.7; }
-        .notice-body strong { color: #ddd; }
-        .notice-link {
-            display: inline-block; margin-top: 6px;
-            color: #ffffff; font-size: 0.78rem; font-weight: 600;
-            text-decoration: none; border-bottom: 2px solid #ffffff;
+        .feedback-card textarea:focus { border-color: var(--green); box-shadow: 0 0 10px rgba(57, 255, 138, 0.2); }
+        .feedback-card textarea::placeholder { color: var(--ink-faint); }
+        
+        #feedback-submit {
+            margin-top: 10px; width: 100%;
+            background: var(--green); color: #04140c;
+            border: 2px solid var(--green);
+            box-shadow: 0 0 12px rgba(57, 255, 138, 0.3), 3px 3px 0 0 var(--shadow);
+            padding: 12px; font-weight: 800;
+            font-family: 'Space Grotesk', sans-serif; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-transform: uppercase;
         }
+        #feedback-submit:hover { background: #50ff9a; transform: translateY(-1px); box-shadow: 0 0 18px rgba(57, 255, 138, 0.5), 4px 4px 0 0 var(--shadow); }
+        #feedback-submit:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--shadow); }
+        #feedback-status { margin-top: 8px; font-size: 0.72rem; color: var(--ink-soft); min-height: 14px; text-align: center; }
+        #feedback-status.ok { color: var(--green); }
+        #feedback-status.err { color: #ff6f6f; }
 
-        /* Boot screen */
+        /* ===== Guide Modal ===== */
+        #guide-modal {
+            position: fixed; inset: 0; z-index: 60;
+            background: rgba(2,8,5,0.85); backdrop-filter: blur(6px);
+            display: none; align-items: flex-end; justify-content: center;
+        }
+        #guide-modal.show { display: flex; }
+        #guide-sheet {
+            width: 100%; max-width: 520px; height: 86vh;
+            background: var(--bg-2); border-top: 2px solid var(--green);
+            border-left: 2px solid var(--green); border-right: 2px solid var(--green);
+            display: flex; flex-direction: column;
+            transform: translateY(100%); transition: transform 0.35s cubic-bezier(.2,.9,.2,1.1);
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+        }
+        #guide-modal.show #guide-sheet { transform: translateY(0); }
+        #guide-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 18px; border-bottom: 2px solid var(--green-dim);
+        }
+        #guide-header span { font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--ink); letter-spacing: 0.5px; }
+        #guide-close {
+            width: 32px; height: 32px; background: var(--surface); border: 2px solid var(--green);
+            color: var(--green); font-family: 'Space Grotesk'; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        #guide-close:hover { background: var(--green); color: #04140c; }
+        #guide-frame { flex: 1; border: none; width: 100%; background: var(--bg); }
+
+        /* ===== Boot Screen ===== */
         #boot-screen {
             position: fixed; inset: 0; z-index: 100;
-            background: #fff; display: none;
-            flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+            background: rgba(5, 16, 10, 0.95); backdrop-filter: blur(12px);
+            display: none; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
         }
         #boot-screen.show { display: flex; }
-        .boot-logo-frame.sticker { width: 200px; max-width: 66vw; padding: 8px; transform: rotate(-2deg); }
-        .boot-logo-video { width: 100%; height: auto; display: block; background: #fff; }
-        .boot-logo-frame.sticker { background: #fff; }
+        .boot-logo-frame.sticker { width: 90px; height: 90px; padding: 0; display: flex; align-items: center; justify-content: center; transform: rotate(-2deg); box-shadow: 0 0 25px var(--glow); }
+        .boot-logo-frame svg { width: 44px; height: 44px; animation: spin-slow 3s linear infinite; }
+        @keyframes spin-slow { to { transform: rotate(360deg); } }
         .boot-lines { display: flex; flex-direction: column; gap: 10px; width: 250px; }
         .boot-line {
             display: flex; align-items: center; gap: 10px;
             color: var(--ink-faint); font-size: 0.73rem; font-weight: 600; letter-spacing: 0.6px; transition: color 0.3s;
+            font-family: 'JetBrains Mono', monospace;
         }
-        .boot-line.done { color: var(--ink); }
-        .boot-line .bl-box { width: 12px; height: 12px; border: 2px solid #ddd; flex-shrink: 0; transition: 0.3s; }
-        .boot-line.done .bl-box { background: var(--ink); border-color: var(--ink); box-shadow: 2px 2px 0 0 var(--shadow-on-light); }
-        .boot-bar-wrap { width: 220px; height: 8px; border: 2px solid var(--ink); background: #fff; }
-        .boot-bar { height: 100%; width: 0%; background: var(--ink); transition: width 0.25s ease; }
-
-        #chrome-banner {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-            background: #000; border-bottom: 3px solid #000;
-            padding: 12px 16px; display: none; align-items: center; gap: 12px;
-        }
-        #chrome-banner.show { display: flex; }
-        .chrome-banner-icon svg { width: 22px; height: 22px; display: block; }
-        .chrome-banner-text { flex: 1; font-size: 0.75rem; color: #aaa; line-height: 1.4; }
-        .chrome-banner-text strong { font-family: 'Space Grotesk', sans-serif; color: #fff; display: block; margin-bottom: 2px; }
-        .chrome-banner-btn {
-            font-family: 'Space Grotesk', sans-serif;
-            background: var(--ink); color: #fff;
-            border: 2px solid var(--ink);
-            box-shadow: 3px 3px 0 0 var(--shadow-on-light);
-            padding: 7px 13px; font-size: 0.75rem;
-            font-weight: 800; cursor: pointer; white-space: nowrap; flex-shrink: 0;
-        }
+        .boot-line.done { color: var(--green); }
+        .boot-line .bl-box { width: 12px; height: 12px; border: 2px solid var(--green-dim); flex-shrink: 0; transition: 0.3s; }
+        .boot-line.done .bl-box { background: var(--green); border-color: var(--green); box-shadow: 0 0 8px var(--green); }
+        .boot-bar-wrap { width: 220px; height: 8px; border: 2px solid var(--green); background: var(--bg); box-shadow: 0 0 10px rgba(57, 255, 138, 0.2); }
+        .boot-bar { height: 100%; width: 0%; background: var(--green); transition: width 0.25s ease; box-shadow: 0 0 8px var(--green); }
     </style>
 </head>
 <body>
 
-<div id="chrome-banner">
-    <div class="chrome-banner-icon">
-        <svg viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="#ffffff" stroke-width="1.5"/>
-            <circle cx="12" cy="12" r="4" fill="#ffffff"/>
-            <path d="M12 8h8.5M6.5 18.5l4-7M17.5 18.5l-4-7" stroke="#ffffff" stroke-width="1.5"/>
-        </svg>
-    </div>
-    <div class="chrome-banner-text">
-        <strong>Open in Chrome</strong>
-        For the best SONIX experience
-    </div>
-    <button class="chrome-banner-btn" onclick="openInChrome()">Open ↗</button>
+<!-- ===== Background with 3D Terrain Engine ===== -->
+<div id="bg-layer">
+    <div id="terrain-wrap"></div>
 </div>
 
+<!-- ===== Top Header Bar (Menu left, Brand right) ===== -->
+<div id="topbar">
+    <div id="hamburger" onclick="toggleMenu()" title="Open Menu">
+        <span></span><span></span><span></span>
+    </div>
+    <div class="brandmark"><span class="dot-mark"></span><span>SONIX</span></div>
+</div>
+
+<!-- ===== Slide-out Left Navigation Menu ===== -->
+<div id="menu-backdrop" onclick="closeMenu()"></div>
+<div id="menu-panel">
+    <div class="menu-eyebrow">Menu</div>
+    <div class="menu-panel-item">
+        <div class="menu-btn sticker" onclick="closeMenu(); launchBoot();">
+            <div class="mb-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green);">
+                    <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>
+                </svg>
+            </div>
+            <div>Get Started<small>Launch SONIX now</small></div>
+        </div>
+    </div>
+    <div class="menu-panel-item">
+        <div class="menu-btn sticker" onclick="openGuide()">
+            <div class="mb-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green);">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+            </div>
+            <div>Guide<small>How SONIX works</small></div>
+        </div>
+    </div>
+    <div id="menu-footer">
+        <div class="mono">SONIX · EARLY ACCESS</div>
+    </div>
+</div>
+
+<!-- ===== Interactive Slides ===== -->
 <div id="slides">
 
+    <!-- Slide 1 — Hero -->
     <div class="slide active" data-slide="0">
-        <div class="logo-wrap">
-            <div class="logo-frame sticker">
-                <video class="logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
-            </div>
-            <span class="tag-new">AI OS · V3</span>
-            <div class="logo-version">BY VLAD</div>
-        </div>
-        <div class="slide1-headline">Your AI,<br>built different.</div>
-        <div class="slide1-sub">Fast responses, multiple personas, and a knowledge engine that goes well beyond basic chat.</div>
-    </div>
-
-    <div class="slide" data-slide="1">
-        <div class="feature-icon sticker">
-            <svg viewBox="0 0 36 36" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
-                <circle cx="18" cy="13" r="5"/>
-                <path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12"/>
-                <path d="M26 18l3 3-3 3"/>
+        <div class="logo-frame sticker">
+            <svg viewBox="0 0 36 36" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 4l3.5 8.5L30 15l-8.5 2.5L18 26l-3.5-8.5L6 15l8.5-2.5L18 4z"/>
             </svg>
         </div>
-        <div class="feature-label">Mode system</div>
-        <div class="feature-title">10 Personas,<br>one AI</div>
-        <div class="feature-desc">Switch between modes on the fly. SONIX adapts its tone, style, and depth to how you need it right now.</div>
-        <div class="persona-pills" id="persona-pills">
-            <div class="pill">Default</div>
-            <div class="pill">Coder</div>
-            <div class="pill">Friend</div>
-            <div class="pill">Formal</div>
-            <div class="pill">Savage</div>
-            <div class="pill">Analyst</div>
-            <div class="pill">Teacher</div>
-            <div class="pill">Coach</div>
-            <div class="pill">Philosopher</div>
-            <div class="pill">Storyteller</div>
-        </div>
+        <span class="tag-new">AI · V1</span>
+        <div class="slide1-headline">Meet <span class="accent">SONIX</span>.<br>Your AI, built different.</div>
+        <div class="slide1-sub">Fast, adaptable, and made to actually get things done — not just chat.</div>
     </div>
 
-    <div class="slide" data-slide="2">
-        <div class="feature-label">Built-in engines</div>
-        <div class="feature-title">More than chat</div>
+    <!-- Slide 2 — Purpose -->
+    <div class="slide" data-slide="1">
+        <div class="feature-label">Purpose</div>
+        <div class="feature-title">Not just an AI.<br>It's a toolkit.</div>
+        <div class="feature-desc">SONIX pairs conversation with real tools, and every response is built to keep you safe while you use it.</div>
         <div class="cap-list">
             <div class="cap-item sticker">
                 <div class="cap-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
-                        <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                     </svg>
                 </div>
-                <div class="cap-item-text"><strong>Advanced Math</strong>Algebra, calculus, stats, quadratics, finance</div>
+                <div class="cap-item-text"><strong>Built-in tools</strong>Search, calculation, and task help beyond plain chat</div>
             </div>
             <div class="cap-item sticker">
                 <div class="cap-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                     </svg>
                 </div>
-                <div class="cap-item-text"><strong>Live Research</strong>Wikipedia + DuckDuckGo lookups in real time</div>
+                <div class="cap-item-text"><strong>Safe by design</strong>Guardrails built in so it's dependable to use daily</div>
             </div>
             <div class="cap-item sticker">
                 <div class="cap-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>
                     </svg>
                 </div>
-                <div class="cap-item-text"><strong>Emotional Intelligence</strong>Detects your mood and adjusts its tone</div>
+                <div class="cap-item-text"><strong>Adapts to you</strong>Adjusts depth and tone to whatever you're working on</div>
             </div>
         </div>
     </div>
 
-    <div class="slide" data-slide="3">
-        <div class="stamp-wrap">
-            <svg class="stamp-ring" viewBox="0 0 168 168">
-                <defs>
-                    <path id="stamp-circle" d="M 84,84 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0" />
-                </defs>
-                <text font-family="Space Grotesk, sans-serif" font-size="11" font-weight="700" letter-spacing="3" fill="#000000">
-                    <textPath href="#stamp-circle" startOffset="0%">SONIX · READY TO GO · SONIX · READY TO GO ·</textPath>
-                </text>
+    <!-- Slide 3 — Warning & Feedback -->
+    <div class="slide" data-slide="2">
+        <div class="warn-icon sticker">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <div class="stamp-core">
-                <svg viewBox="0 0 30 30" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round">
-                    <polyline points="6 15 12 21 24 9"/>
-                </svg>
-            </div>
         </div>
-        <div class="ready-title">SONIX is ready.</div>
-        <div class="ready-sub">Sign in or continue as a guest. Your conversations stay private and on-device.</div>
+        <div class="ready-title">Before you dive in</div>
+        <div class="ready-sub">SONIX is in early access — most things work, some things are still catching up.</div>
 
         <div class="notice-card sticker">
             <div class="notice-header">
-                <svg viewBox="0 0 20 20" fill="none" stroke="#ddd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M10 2L2 17h16L10 2z"/>
-                    <line x1="10" y1="9" x2="10" y2="12"/>
-                    <circle cx="10" cy="15" r="0.5" fill="#ddd"/>
+                <svg viewBox="0 0 20 20" fill="none" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 2L2 17h16L10 2z"/><line x1="10" y1="9" x2="10" y2="12"/><circle cx="10" cy="15" r="0.5" fill="var(--green)"/>
                 </svg>
-                <span>Early Access Notice</span>
+                <span>Early Access</span>
             </div>
-            <div class="notice-body">
-                SONIX is currently in <strong>early access</strong> — some features are still being built and may change.<br><br>
-                Found a bug or have feedback?
-                <a class="notice-link" href="mailto:sonixhub@gmail.com">Message sonixhub@gmail.com</a>
-            </div>
+            <div class="notice-body">Some features may be slow, incomplete, or change without notice. That's expected at this stage — thanks for being early.</div>
+        </div>
+
+        <div class="feedback-card sticker">
+            <label>Found a bug? Have feedback?</label>
+            <textarea id="feedback-text" placeholder="Tell us what happened, or what you'd like to see..."></textarea>
+            <button id="feedback-submit" onclick="sendFeedback()">Send feedback</button>
+            <div id="feedback-status"></div>
         </div>
     </div>
 
 </div>
 
+<!-- ===== Bottom Navigation Bar ===== -->
 <div id="nav">
     <div id="dots"></div>
-    <button id="btn-next">Get Started</button>
+    <button id="btn-next">Next</button>
     <button id="btn-skip">Skip intro</button>
 </div>
 
+<!-- ===== Embedded Guide Modal ===== -->
+<div id="guide-modal">
+    <div id="guide-sheet">
+        <div id="guide-header">
+            <span>Guide</span>
+            <button id="guide-close" onclick="closeGuide()">✕</button>
+        </div>
+        <iframe id="guide-frame" src="about:blank"></iframe>
+    </div>
+</div>
+
+<!-- ===== Boot / Splash Screen ===== -->
 <div id="boot-screen">
     <div class="boot-logo-frame sticker">
-        <video class="boot-logo-video" src="sonix-logo.mp4" autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
+        <svg viewBox="0 0 36 36" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 4l3.5 8.5L30 15l-8.5 2.5L18 26l-3.5-8.5L6 15l8.5-2.5L18 4z"/>
+        </svg>
     </div>
     <div class="boot-lines">
         <div class="boot-line" id="bl-0"><div class="bl-box"></div>Loading model engine...</div>
-        <div class="boot-line" id="bl-1"><div class="bl-box"></div>Initialising personas...</div>
+        <div class="boot-line" id="bl-1"><div class="bl-box"></div>Initialising tools...</div>
         <div class="boot-line" id="bl-2"><div class="bl-box"></div>Connecting knowledge base...</div>
         <div class="boot-line" id="bl-3"><div class="bl-box"></div>Ready.</div>
     </div>
     <div class="boot-bar-wrap"><div class="boot-bar" id="boot-bar"></div></div>
 </div>
 
+<!-- ===== External Libraries ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
 <script>
-    const TOTAL = 4;
+    /* ===== 3D Blueprint Terrain Engine ===== */
+    (function(){
+        var wrap = document.getElementById('terrain-wrap');
+        var W = window.innerWidth, H = window.innerHeight;
+
+        var scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x05100a);
+        scene.fog = new THREE.FogExp2(0x05100a, 0.0016);
+
+        var camera = new THREE.PerspectiveCamera(50, W/H, 0.1, 4000);
+        var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(W, H);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        wrap.appendChild(renderer.domElement);
+
+        var ambient = new THREE.AmbientLight(0x2c5c3c, 0.85);
+        scene.add(ambient);
+        var dir = new THREE.DirectionalLight(0x9fe1cb, 0.9);
+        dir.position.set(150, 300, 90);
+        scene.add(dir);
+
+        function hash(x, z) {
+            var s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+            return s - Math.floor(s);
+        }
+        function noise2(x, z) {
+            var xi = Math.floor(x), zi = Math.floor(z);
+            var xf = x - xi, zf = z - zi;
+            var a = hash(xi, zi), b = hash(xi + 1, zi);
+            var c = hash(xi, zi + 1), d = hash(xi + 1, zi + 1);
+            var u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+            return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+        }
+
+        function height(x, z) {
+            var h = 0;
+            h += 80 * Math.exp(-(((x-50)*(x-50) + (z+25)*(z+25)) / 6000));
+            h += 65 * Math.exp(-(((x+75)*(x+75) + (z-55)*(z-55)) / 4800));
+            h += 55 * Math.exp(-(((x+15)*(x+15) + (z+90)*(z+90)) / 4200));
+            h += 45 * Math.exp(-(((x-95)*(x-95) + (z-95)*(z-95)) / 3400));
+            h += 38 * Math.exp(-(((x+120)*(x+120) + (z+10)*(z+10)) / 3000));
+
+            h += 10 * (noise2(x * 0.06, z * 0.06) - 0.5);
+            h += 5.5 * (noise2(x * 0.15, z * 0.15) - 0.5);
+            h += 2.8 * (noise2(x * 0.4, z * 0.4) - 0.5);
+            h += 1.2 * (noise2(x * 1.1, z * 1.1) - 0.5);
+            return h;
+        }
+
+        var size = 520, seg = 170;
+        var geo = new THREE.PlaneGeometry(size, size, seg, seg);
+        geo.rotateX(-Math.PI/2);
+
+        var pos = geo.attributes.position;
+        var maxH = -Infinity, minH = Infinity;
+        for (var i = 0; i < pos.count; i++) {
+            var x = pos.getX(i), z = pos.getZ(i);
+            var y = height(x, z);
+            pos.setY(i, y);
+            if (y > maxH) maxH = y;
+            if (y < minH) minH = y;
+        }
+        geo.computeVertexNormals();
+
+        var bands = [0xEAF3DE, 0xC0DD97, 0x97C459, 0x639922, 0x3B6D11, 0x27500A, 0x173404];
+        var range = maxH - minH;
+        var colors = [];
+        for (var j = 0; j < pos.count; j++) {
+            var yy = pos.getY(j);
+            var t = (yy - minH) / range;
+            var idx = Math.min(bands.length - 1, Math.max(0, Math.floor(t * bands.length)));
+            var c = new THREE.Color(bands[idx]);
+            colors.push(c.r, c.g, c.b);
+        }
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+        var mat = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            flatShading: true,
+            roughness: 0.9,
+            metalness: 0.05
+        });
+        var terrain = new THREE.Mesh(geo, mat);
+        terrain.matrixAutoUpdate = false;
+        terrain.updateMatrix();
+        scene.add(terrain);
+
+        var wireMat = new THREE.MeshBasicMaterial({
+            color: 0x39ff8a,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.2
+        });
+        var wireMesh = new THREE.Mesh(geo.clone(), wireMat);
+        wireMesh.scale.set(1.001, 1.002, 1.001);
+        wireMesh.matrixAutoUpdate = false;
+        wireMesh.updateMatrix();
+        scene.add(wireMesh);
+
+        /* Tree Placement */
+        var lowBand = minH + range * 0.06;
+        var midBand = minH + range * 0.55;
+        var treeCount = 260;
+        var trunkGeo = new THREE.CylinderGeometry(0.6, 0.8, 4, 5);
+        var trunkMat = new THREE.MeshStandardMaterial({ color: 0x27500A, flatShading: true, roughness: 1 });
+        var trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, treeCount);
+
+        var foliageGeo = new THREE.ConeGeometry(3.4, 8, 6);
+        var foliageMat = new THREE.MeshStandardMaterial({ color: 0x3B6D11, flatShading: true, roughness: 1 });
+        var foliageMesh = new THREE.InstancedMesh(foliageGeo, foliageMat, treeCount);
+
+        var dummy = new THREE.Object3D();
+        var placed = 0, attempts = 0;
+        while (placed < treeCount && attempts < treeCount * 30) {
+            attempts++;
+            var tx = (Math.random() - 0.5) * size * 0.92;
+            var tz = (Math.random() - 0.5) * size * 0.92;
+            var ty = height(tx, tz);
+            if (ty < lowBand || ty > midBand) continue;
+
+            var s = 0.6 + Math.random() * 0.9;
+            dummy.position.set(tx, ty + 2 * s, tz);
+            dummy.scale.set(s, s, s);
+            dummy.rotation.y = Math.random() * Math.PI * 2;
+            dummy.updateMatrix();
+            trunkMesh.setMatrixAt(placed, dummy.matrix);
+
+            dummy.position.set(tx, ty + 6 * s, tz);
+            dummy.updateMatrix();
+            foliageMesh.setMatrixAt(placed, dummy.matrix);
+            placed++;
+        }
+        trunkMesh.count = placed;
+        foliageMesh.count = placed;
+        scene.add(trunkMesh);
+        scene.add(foliageMesh);
+
+        /* Grass Placement */
+        var grassCount = 1400;
+        var grassGeo = new THREE.ConeGeometry(0.35, 1.6, 4);
+        var grassMat = new THREE.MeshStandardMaterial({ color: 0x639922, flatShading: true, roughness: 1 });
+        var grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassCount);
+
+        var gPlaced = 0, gAttempts = 0;
+        while (gPlaced < grassCount && gAttempts < grassCount * 20) {
+            gAttempts++;
+            var gx = (Math.random() - 0.5) * size * 0.95;
+            var gz = (Math.random() - 0.5) * size * 0.95;
+            var gy = height(gx, gz);
+            if (gy < lowBand || gy > lowBand + range * 0.22) continue;
+
+            var gs = 0.7 + Math.random() * 1.1;
+            dummy.position.set(gx, gy + 0.8 * gs, gz);
+            dummy.scale.set(gs, gs, gs);
+            dummy.rotation.y = Math.random() * Math.PI * 2;
+            dummy.updateMatrix();
+            grassMesh.setMatrixAt(gPlaced, dummy.matrix);
+            gPlaced++;
+        }
+        grassMesh.count = gPlaced;
+        scene.add(grassMesh);
+
+        /* Camera Movement */
+        var target = new THREE.Vector3(0, maxH * 0.3, 0);
+        var angle = 0;
+        var radius = size * 0.34;
+        var baseCamHeight = minH + range * 0.9;
+        var clearance = 22;
+
+        window.addEventListener('resize', function () {
+            var w = window.innerWidth, h = window.innerHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        var clock = new THREE.Clock();
+        var angularSpeed = 0.075;
+        var currentCamY = Math.max(baseCamHeight, height(radius, 0) + clearance);
+        var smoothing = 2.2;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            var dt = Math.min(clock.getDelta(), 0.1);
+
+            angle += angularSpeed * dt;
+            var cx = target.x + Math.cos(angle) * radius;
+            var cz = target.z + Math.sin(angle) * radius;
+            camera.position.x = cx;
+            camera.position.z = cz;
+
+            var groundHere = height(cx, cz);
+            var desiredY = Math.max(baseCamHeight, groundHere + clearance);
+            var lerpT = 1 - Math.exp(-smoothing * dt);
+            currentCamY += (desiredY - currentCamY) * lerpT;
+            camera.position.y = currentCamY;
+
+            camera.lookAt(target);
+            renderer.render(scene, camera);
+        }
+        animate();
+    })();
+
+    /* ===== Slides & UI Logic ===== */
+    const TOTAL = 3;
     let current = 0;
 
     const slides   = document.querySelectorAll('.slide');
@@ -427,13 +728,12 @@
         d.className = 'dot' + (i === 0 ? ' active' : '');
         dotsEl.appendChild(d);
     }
-
     function getDots() { return document.querySelectorAll('.dot'); }
 
     function goTo(idx) {
         slides[current].classList.remove('active');
         slides[current].classList.add('exit');
-        setTimeout(() => slides[current - 1 < 0 ? 0 : current].classList.remove('exit'), 500);
+        setTimeout(() => slides[current].classList.remove('exit'), 500);
 
         getDots()[current].classList.remove('active');
         current = idx;
@@ -447,20 +747,11 @@
             btnNext.textContent = 'Next';
             btnSkip.classList.remove('hidden');
         }
-
-        if (current === 1) animatePills();
-    }
-
-    function animatePills() {
-        const pills = document.querySelectorAll('#persona-pills .pill');
-        pills.forEach(p => p.classList.remove('lit'));
-        pills.forEach((p, i) => { setTimeout(() => p.classList.add('lit'), i * 90); });
     }
 
     btnNext.addEventListener('click', () => {
         if (current < TOTAL - 1) { goTo(current + 1); } else { launchBoot(); }
     });
-
     btnSkip.addEventListener('click', launchBoot);
 
     function launchBoot() {
@@ -472,40 +763,80 @@
                 document.getElementById('bl-' + i).classList.add('done');
                 bar.style.width = ((idx + 1) / lines.length * 100) + '%';
                 if (idx === lines.length - 1) {
-                    setTimeout(() => {
-                        localStorage.setItem('sonix_welcomed', '1');
-                        window.location.href = 'app.html';
-                    }, 600);
+                    setTimeout(() => { window.location.href = 'app.html'; }, 600);
                 }
             }, 320 * (idx + 1));
         });
     }
 
-    function openInChrome() {
-        const url = window.location.href;
-        const isAndroid = /android/i.test(navigator.userAgent);
-        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-        if (isAndroid) {
-            window.location.href = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
-        } else if (isIOS) {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => { alert('Link copied! Open Chrome or Safari and paste it.'); });
-            } else {
-                prompt('Copy this link and open in Chrome:', url);
-            }
-        } else {
-            window.open(url, '_blank');
-        }
+    /* ===== Hamburger Navigation Menu ===== */
+    const hamburger    = document.getElementById('hamburger');
+    const menuBackdrop = document.getElementById('menu-backdrop');
+    const menuPanel    = document.getElementById('menu-panel');
+
+    function toggleMenu() {
+        const isOpen = menuPanel.classList.contains('show');
+        isOpen ? closeMenu() : openMenu();
+    }
+    function openMenu() {
+        hamburger.classList.add('open');
+        menuBackdrop.classList.add('show');
+        menuPanel.classList.add('show');
+    }
+    function closeMenu() {
+        hamburger.classList.remove('open');
+        menuBackdrop.classList.remove('show');
+        menuPanel.classList.remove('show');
     }
 
-    (function detectInAppBrowser() {
-        const ua = navigator.userAgent || '';
-        const isInApp = /Instagram|FBAN|FBAV|Twitter|musical_ly|TikTok/i.test(ua);
-        if (isInApp) {
-            document.getElementById('chrome-banner').classList.add('show');
-            document.getElementById('slides').style.paddingTop = '60px';
+    /* ===== Guide Modal ===== */
+    function openGuide() {
+        closeMenu();
+        document.getElementById('guide-frame').src = 'info.html';
+        document.getElementById('guide-modal').classList.add('show');
+    }
+    function closeGuide() {
+        document.getElementById('guide-modal').classList.remove('show');
+        document.getElementById('guide-frame').src = 'about:blank';
+    }
+
+    /* ===== Feedback Integration ===== */
+    const WEBHOOK_URL = 'https://discord.com/api/webhooks/1520406085511675974/904vxaGgyqXpdx3D9Uj7pVn_zJAcRfU7Rte7RZ3UTGPby3ff-QBIXzqqFuE_lB8bYrmX';
+
+    async function sendFeedback() {
+        const textEl = document.getElementById('feedback-text');
+        const statusEl = document.getElementById('feedback-status');
+        const text = textEl.value.trim();
+
+        if (!text) {
+            statusEl.textContent = 'Write something first.';
+            statusEl.className = 'err';
+            return;
         }
-    })();
+
+        statusEl.textContent = 'Sending...';
+        statusEl.className = '';
+
+        try {
+            const res = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: '📩 **SONIX Feedback**\n' + text })
+            });
+
+            if (res.ok) {
+                statusEl.textContent = 'Sent — thanks for the feedback!';
+                statusEl.className = 'ok';
+                textEl.value = '';
+            } else {
+                statusEl.textContent = 'Couldn\'t send that. Try again in a moment.';
+                statusEl.className = 'err';
+            }
+        } catch (err) {
+            statusEl.textContent = 'Couldn\'t send that. Check your connection.';
+            statusEl.className = 'err';
+        }
+    }
 </script>
 </body>
 </html>
