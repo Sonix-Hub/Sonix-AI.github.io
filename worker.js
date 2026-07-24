@@ -2,31 +2,37 @@
  * SONIX BACKEND — Cloudflare Worker
  * ================================================================
  * Handles: passwordless email sign-in (6-digit verification code)+login,
- * Google Sign-In, and syncing conversations to a real database (D1)
- * instead of only the browser's local storage.
+ * Google Sign-In, optional email-based 2FA as a second step, login
+ * notification emails, and syncing conversations to D1.
  *
- * SETUP (see the deployment guide for full step-by-step details):
- *   1. Create a D1 database, run schema.sql against it, bind it to
- *      this Worker as "DB" (wrangler.jsonc or the dashboard).
- *   2. Set these secrets on the Worker (Settings -> Variables ->
- *      encrypt as secret), NOT as plain vars:
- *        - RESEND_API_KEY      (from resend.com, for sending email)
+ * SETUP:
+ *   1. Create/keep a D1 database, run schema.sql AND migration_2fa.sql
+ *      against it, bind it to this Worker as "DB".
+ *   2. Set these as Worker SECRETS (never plain vars):
+ *        - RESEND_API_KEY      (from resend.com)
  *        - GOOGLE_CLIENT_ID    (from Google Cloud Console OAuth)
- *        - JWT_SIGNING_SECRET  (any long random string you make up)
- *   3. Set ALLOWED_ORIGIN as a plain variable = your app's URL,
- *      e.g. "https://sonix-ai.pages.dev" (no trailing slash).
+ *   3. Set ALLOWED_ORIGIN as a plain variable = your app's URL.
  *   4. Update FROM_EMAIL below to an address verified in Resend.
+ *
+ * USER SETTINGS SHAPE (stored in users.settings_json):
+ *   {
+ *     "twoFA": { "enabled": true, "method": "email" | "pin" | "pattern" | "biometric" },
+ *     "loginNotifications": true | false
+ *   }
+ *   "pin" / "pattern" / "biometric" are verified entirely client-side
+ *   (PIN/pattern stored in the browser, biometric via WebAuthn) — only
+ *   "email" 2FA needs a server round-trip, which is what's added below.
  * ================================================================
  */
 
-const FROM_EMAIL = 'SONIX <onboarding@resend.dev>'; // Works immediately, no domain verification needed —
-// BUT can only deliver to the email address on your own Resend account until you verify a domain.
-// To send to real users, verify a domain at resend.com/domains, then change this to
-// something like 'SONIX <noreply@yourdomain.com>'.
+const FROM_EMAIL = 'SONIX <onboarding@resend.dev>';
 
-const CODE_EXPIRY_MS = 10 * 60 * 1000; // verification code valid for 10 minutes
+const CODE_EXPIRY_MS = 10 * 60 * 1000;
 const MAX_CODE_ATTEMPTS = 5;
-const RESEND_COOLDOWN_MS = 60 * 1000; // FIX: minimum time between codes sent to the same email
+const RESEND_COOLDOWN_MS = 60 * 1000;
+
+const TWOFA_CODE_EXPIRY_MS = 10 * 60 * 1000;
+const TWOFA_MAX_ATTEMPTS = 5;
 
 // ---------- Small helpers ----------
 
@@ -55,33 +61,27 @@ function base64UrlToBytes(b64url) {
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes;
 }
-function bytesToBase64Url(bytes) {
-    let bin = '';
-    bytes.forEach(b => bin += String.fromCharCode(b));
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
-// ---------- Input validation ----------
-
-// Standard, practical email shape check: something@something.tld
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
 function isValidEmail(email) {
     return typeof email === 'string' && email.length <= 254 && EMAIL_RE.test(email);
 }
 
 function generateCode() {
-    // 6-digit numeric code, e.g. 048213
     const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
     return String(n).padStart(6, '0');
+}
+
+function getUserSettings(userRow) {
+    return userRow && userRow.settings_json ? JSON.parse(userRow.settings_json) : {};
 }
 
 // ---------- Sessions ----------
 
 async function createSession(env, userId) {
-    const token = uuid() + uuid(); // long random token
+    const token = uuid() + uuid();
     const now = Date.now();
-    const expires = now + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const expires = now + 30 * 24 * 60 * 60 * 1000;
     await env.DB.prepare(
         'INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'
     ).bind(token, userId, now, expires).run();
@@ -100,7 +100,7 @@ async function getUserFromRequest(request, env) {
     return { id: row.id, email: row.email, name: row.name };
 }
 
-// ---------- Google ID token verification (real JWT signature check, not the throttled dev-only endpoint) ----------
+// ---------- Google ID token verification ----------
 
 let _googleKeysCache = null, _googleKeysCacheAt = 0;
 async function getGooglePublicKeys() {
@@ -138,7 +138,7 @@ async function verifyGoogleIdToken(idToken, expectedClientId) {
     return { sub: payload.sub, email: payload.email, name: payload.name || payload.email };
 }
 
-// ---------- Email sending (via Resend — free tier, simple REST API) ----------
+// ---------- Email sending ----------
 
 async function sendEmail(env, to, subject, html) {
     if (!env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
@@ -153,21 +153,59 @@ async function sendEmail(env, to, subject, html) {
     }
 }
 
-// ---------- Route handlers ----------
+// NEW: "new login" notification — best-effort, never blocks login if it fails
+async function sendLoginNotification(env, user, request) {
+    try {
+        const settings = getUserSettings(user);
+        if (settings.loginNotifications === false) return; // opted out
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const country = request.headers.get('CF-IPCountry') || 'unknown';
+        const when = new Date().toUTCString();
+        await sendEmail(env, user.email, 'New sign-in to your SONIX account',
+            `<p>Your SONIX account was just signed into.</p>` +
+            `<p><b>When:</b> ${when}<br><b>Approx. location:</b> ${country}<br><b>IP:</b> ${ip}</p>` +
+            `<p>If this wasn't you, we'd recommend enabling 2FA in Settings → System &amp; Security.</p>`
+        );
+    } catch (e) {
+        console.warn('Login notification failed:', e.message);
+    }
+}
 
-// STEP 1: validate email, email a 6-digit code. Works for both brand-new
-// and returning users — we don't reveal which, and account creation happens
-// in STEP 2 only after the code is confirmed.
+// NEW: send a fresh 2FA code for a pending-auth token, with the same cooldown protection
+async function issueTwoFACode(env, userId, email) {
+    const now = Date.now();
+    const existing = await env.DB.prepare(
+        'SELECT created_at FROM twofa_pending WHERE user_id = ? ORDER BY created_at DESC LIMIT 1'
+    ).bind(userId).first();
+    if (existing && (now - existing.created_at) < RESEND_COOLDOWN_MS) {
+        const waitSec = Math.ceil((RESEND_COOLDOWN_MS - (now - existing.created_at)) / 1000);
+        return { error: `Please wait ${waitSec}s before requesting another code.` };
+    }
+
+    const pendingToken = uuid() + uuid();
+    const code = generateCode();
+    await env.DB.prepare('DELETE FROM twofa_pending WHERE user_id = ?').bind(userId).run();
+    await env.DB.prepare(
+        'INSERT INTO twofa_pending (token, user_id, code, attempts, created_at, expires_at) VALUES (?, ?, ?, 0, ?, ?)'
+    ).bind(pendingToken, userId, code, now, now + TWOFA_CODE_EXPIRY_MS).run();
+
+    await sendEmail(env, email, 'Your SONIX sign-in code',
+        `<p>Someone is signing in to your SONIX account. Enter this code to finish:</p>` +
+        `<p style="font-size:28px;font-weight:800;letter-spacing:4px;">${code}</p>` +
+        `<p>This code expires in 10 minutes. If this wasn't you, ignore this email and consider changing how you sign in.</p>`
+    );
+
+    return { pendingToken };
+}
+
+// ---------- Route handlers: primary sign-in ----------
+
 async function handleEmailRequest(request, env) {
     const { email, nickname } = await request.json();
     if (!email) return json({ error: 'Email is required.' }, 400, env);
     if (!isValidEmail(email)) return json({ error: 'Enter a real email address, e.g. example@gmail.com' }, 400, env);
 
     const now = Date.now();
-
-    // FIX: rate-limit resends to the same email so this endpoint can't be
-    // used to email-bomb someone. If a code was already sent recently,
-    // reject instead of sending another.
     const existing = await env.DB.prepare(
         'SELECT created_at FROM email_verifications WHERE email = ?'
     ).bind(email).first();
@@ -199,8 +237,9 @@ async function handleEmailRequest(request, env) {
     return json({ ok: true }, 200, env);
 }
 
-// STEP 2: check the code. Creates the account on first-ever sign-in,
-// otherwise just logs the existing user in — same code, same endpoint.
+// STEP 2 of primary sign-in. If the account has email-based 2FA enabled,
+// this now returns a pending2FA response instead of a session — the
+// frontend must then call /api/2fa/verify with the code sent separately.
 async function handleEmailVerify(request, env) {
     const { email, code } = await request.json();
     if (!email || !code) return json({ error: 'Missing email or code.' }, 400, env);
@@ -232,9 +271,7 @@ async function handleEmailVerify(request, env) {
         user = { id, email, name };
     }
 
-    const token = await createSession(env, user.id);
-    const settings = user.settings_json ? JSON.parse(user.settings_json) : {};
-    return json({ token, user: { id: user.id, email: user.email, name: user.name, twoFA: settings.twoFA || { enabled: false } } }, 200, env);
+    return await finishLoginOrRequire2FA(env, user, request);
 }
 
 async function handleGoogleAuth(request, env) {
@@ -265,11 +302,76 @@ async function handleGoogleAuth(request, env) {
         await env.DB.prepare('UPDATE users SET google_sub = ? WHERE id = ?').bind(profile.sub, user.id).run();
     }
 
+    return await finishLoginOrRequire2FA(env, user, request);
+}
+
+// NEW: shared by both sign-in methods — branches on whether email 2FA is on
+async function finishLoginOrRequire2FA(env, user, request) {
+    const fullUser = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.id).first();
+    const settings = getUserSettings(fullUser);
+    const twoFA = settings.twoFA || { enabled: false };
+
+    if (twoFA.enabled && twoFA.method === 'email') {
+        const result = await issueTwoFACode(env, user.id, user.email);
+        if (result.error) return json({ error: result.error }, 429, env);
+        return json({ pending2FA: true, pendingToken: result.pendingToken, method: 'email' }, 200, env);
+    }
+
+    // No email 2FA needed here (pin/pattern/biometric are checked client-side,
+    // or 2FA is off entirely) — issue the real session now.
     const token = await createSession(env, user.id);
-    const settingsRow = await env.DB.prepare('SELECT settings_json FROM users WHERE id = ?').bind(user.id).first();
-    const settings = settingsRow && settingsRow.settings_json ? JSON.parse(settingsRow.settings_json) : {};
+    await sendLoginNotification(env, { ...fullUser, email: user.email }, request);
+    return json({ token, user: { id: user.id, email: user.email, name: user.name, twoFA } }, 200, env);
+}
+
+// NEW: resend the email 2FA code for an in-progress pending login
+async function handle2FAResend(request, env) {
+    const { pendingToken } = await request.json();
+    if (!pendingToken) return json({ error: 'Missing pendingToken.' }, 400, env);
+
+    const pending = await env.DB.prepare('SELECT * FROM twofa_pending WHERE token = ?').bind(pendingToken).first();
+    if (!pending) return json({ error: 'That sign-in has expired — start again.' }, 400, env);
+
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(pending.user_id).first();
+    if (!user) return json({ error: 'Account not found.' }, 400, env);
+
+    const result = await issueTwoFACode(env, user.id, user.email);
+    if (result.error) return json({ error: result.error }, 429, env);
+    return json({ pendingToken: result.pendingToken }, 200, env);
+}
+
+// NEW: verify the emailed 2FA code and issue the real session
+async function handle2FAVerify(request, env) {
+    const { pendingToken, code } = await request.json();
+    if (!pendingToken || !code) return json({ error: 'Missing pendingToken or code.' }, 400, env);
+
+    const pending = await env.DB.prepare('SELECT * FROM twofa_pending WHERE token = ?').bind(pendingToken).first();
+    if (!pending) return json({ error: 'That sign-in has expired — start again.' }, 400, env);
+    if (pending.expires_at < Date.now()) {
+        await env.DB.prepare('DELETE FROM twofa_pending WHERE token = ?').bind(pendingToken).run();
+        return json({ error: 'Code expired — request a new one.' }, 400, env);
+    }
+    if (pending.attempts >= TWOFA_MAX_ATTEMPTS) {
+        await env.DB.prepare('DELETE FROM twofa_pending WHERE token = ?').bind(pendingToken).run();
+        return json({ error: 'Too many incorrect attempts — start sign-in again.' }, 429, env);
+    }
+    if (pending.code !== String(code).trim()) {
+        await env.DB.prepare('UPDATE twofa_pending SET attempts = attempts + 1 WHERE token = ?').bind(pendingToken).run();
+        return json({ error: 'Incorrect code.' }, 400, env);
+    }
+
+    await env.DB.prepare('DELETE FROM twofa_pending WHERE token = ?').bind(pendingToken).run();
+
+    const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(pending.user_id).first();
+    if (!user) return json({ error: 'Account not found.' }, 400, env);
+
+    const token = await createSession(env, user.id);
+    const settings = getUserSettings(user);
+    await sendLoginNotification(env, user, request);
     return json({ token, user: { id: user.id, email: user.email, name: user.name, twoFA: settings.twoFA || { enabled: false } } }, 200, env);
 }
+
+// ---------- Account / data routes (unchanged) ----------
 
 async function handleMe(request, env) {
     const user = await getUserFromRequest(request, env);
@@ -282,6 +384,7 @@ async function handleDeleteAccount(request, env) {
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
     await env.DB.prepare('DELETE FROM conversations WHERE user_id = ?').bind(user.id).run();
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
+    await env.DB.prepare('DELETE FROM twofa_pending WHERE user_id = ?').bind(user.id).run();
     await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
     return json({ ok: true }, 200, env);
 }
@@ -333,6 +436,13 @@ async function handleGetSettings(request, env) {
     return json({ settings }, 200, env);
 }
 
+// UPDATED: this is where "asking for permission first" belongs. Turning on
+// email 2FA doesn't require anything extra server-side (the code IS the
+// permission check, sent on next login) — but for PIN/pattern/biometric,
+// your frontend should confirm the method was actually set up successfully
+// (e.g. WebAuthn registration completed) BEFORE calling this to persist
+// twoFA.enabled = true. This endpoint just trusts whatever settings object
+// it's given, so that confirmation step has to happen in app.html first.
 async function handleSaveSettings(request, env) {
     const user = await getUserFromRequest(request, env);
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
@@ -367,6 +477,8 @@ export default {
             if (path === '/api/email-request' && request.method === 'POST') return await handleEmailRequest(request, env);
             if (path === '/api/email-verify' && request.method === 'POST') return await handleEmailVerify(request, env);
             if (path === '/api/google-auth' && request.method === 'POST') return await handleGoogleAuth(request, env);
+            if (path === '/api/2fa/resend' && request.method === 'POST') return await handle2FAResend(request, env);
+            if (path === '/api/2fa/verify' && request.method === 'POST') return await handle2FAVerify(request, env);
             if (path === '/api/me' && request.method === 'GET') return await handleMe(request, env);
             if (path === '/api/account' && request.method === 'DELETE') return await handleDeleteAccount(request, env);
             if (path === '/api/conversations' && request.method === 'GET') return await handleGetConversations(request, env);
