@@ -1292,6 +1292,9 @@ function syncSettingsToCloud() {
                     settings: {
                         profile: currentUser ? { bio: currentUser.bio, avatar: currentUser.avatar, birthday: currentUser.birthday } : {},
                         twoFA: currentUser ? currentUser.twoFA : { enabled: false },
+                        // FIX: this was never sent before, so the "New Login Notification"
+                        // toggle had no effect — the backend checks this exact key.
+                        loginNotifications: !!(settings.securitySettings && settings.securitySettings.loginAlert),
                         systemModels: systemModels,
                         activeModelId: activeModelId,
                         improvementIndex: parseInt(localStorage.getItem('sonix_active_improvement') || '0', 10),
@@ -1391,16 +1394,7 @@ async function handleEmailButton() {
     try {
         const data = await requestAndVerifyEmailCode(email, nickname);
         if (!data) { showAuthErr('Sign-in cancelled.'); return; }
-
-        sessionToken = data.token;
-        localStorage.setItem('sonix_session_token', sessionToken);
-        const user = data.user;
-        document.getElementById('auth-screen').classList.add('hidden');
-        if (user.twoFA && user.twoFA.enabled) {
-            openTwoFAVerify(user);
-        } else {
-            await finishLogin(user);
-        }
+        await handleAuthResult(data);
     } catch (e) {
         showAuthErr(e.message || 'Something went wrong — try again.');
     }
@@ -1410,17 +1404,31 @@ async function handleGoogleCredential(response) {
     try {
         const nickname = document.getElementById('auth-nickname').value.trim();
         const data = await apiFetch('/api/google-auth', { method: 'POST', body: JSON.stringify({ id_token: response.credential, nickname }) });
-        sessionToken = data.token;
-        localStorage.setItem('sonix_session_token', sessionToken);
-        const user = data.user;
-        document.getElementById('auth-screen').classList.add('hidden');
-        if (user.twoFA && user.twoFA.enabled) {
-            openTwoFAVerify(user);
-        } else {
-            await finishLogin(user);
-        }
+        await handleAuthResult(data);
     } catch (e) {
         showAuthErr('Google sign-in failed: ' + (e.message || 'try again'));
+    }
+}
+
+// FIX: shared by both sign-in methods. The server now gates email-based 2FA
+// BEFORE issuing a session — if data.pending2FA is true, no sessionToken
+// exists yet at all, so there's nothing to bypass by closing the modal.
+// PIN / pattern / fingerprint 2FA still get a token immediately (the server
+// has no way to check those — they're verified entirely on-device), so
+// those still go through the existing client-side openTwoFAVerify() gate.
+async function handleAuthResult(data) {
+    document.getElementById('auth-screen').classList.add('hidden');
+    if (data.pending2FA) {
+        openServerTwoFAVerify(data.pendingToken);
+        return;
+    }
+    sessionToken = data.token;
+    localStorage.setItem('sonix_session_token', sessionToken);
+    const user = data.user;
+    if (user.twoFA && user.twoFA.enabled && user.twoFA.method !== 'email') {
+        openTwoFAVerify(user);
+    } else {
+        await finishLogin(user);
     }
 }
 function initGoogleSignIn() {
@@ -1792,7 +1800,7 @@ async function registerBiometric2FA() {
 function renderEmailCodeSetupStep(body) {
     body.innerHTML =
         '<div class="model-info-box" style="margin-bottom:14px;">' +
-        "SONIX has no server, so it can't actually email you a code — instead, a fresh 6-digit code will be shown right here on your device each time you log in, and you'll type it in to confirm it's really you." +
+        "A 6-digit code will be emailed to your account's email address each time you log in — you'll enter it to confirm it's really you." +
         '</div>' +
         '<button class="model-mini-btn primary" style="width:100%;" onclick="save2FAConfig(\'email\', {})">Enable Verification Code</button>';
 }
@@ -1825,13 +1833,48 @@ function openTwoFAVerify(user) {
     } else if (twoFA.method === 'fingerprint') {
         body.innerHTML = '<div style="text-align:center;padding:20px 10px;color:#888;font-size:0.82rem;">Verifying with your fingerprint / face…</div>';
         verifyBiometric2FA(twoFA);
-    } else if (twoFA.method === 'email') {
-        _pendingEmailCode = String(Math.floor(100000 + Math.random() * 900000));
-        body.innerHTML =
-            '<div class="model-info-box" style="margin-bottom:12px;">Since SONIX has no server, here is your code (normally this would be emailed):</div>' +
-            '<div class="twofa-code-display">' + _pendingEmailCode + '</div>' +
-            '<input class="model-form-input" id="twofa-email-input" placeholder="Enter the 6-digit code" style="margin-top:14px;" maxlength="6">' +
-            '<button class="model-mini-btn primary" style="width:100%;margin-top:12px;" onclick="verifyEmailCode2FA()">Verify</button>';
+    }
+    // NOTE: 'email' 2FA no longer has a branch here — the server issues a
+    // pending2FA response BEFORE any session token exists, and that's
+    // handled by openServerTwoFAVerify() below instead, from handleAuthResult().
+}
+
+// FIX: real server-backed email 2FA — replaces the old local fake-code flow.
+// No session token exists until the emailed code is verified, so this can't
+// be bypassed by dismissing the modal.
+let _pendingServerToken = null;
+function openServerTwoFAVerify(pendingToken) {
+    _pendingServerToken = pendingToken;
+    openModal('twofa-verify-modal');
+    const body = document.getElementById('twofa-verify-body');
+    body.innerHTML =
+        '<div class="model-info-box" style="margin-bottom:12px;">We emailed a 6-digit code to finish signing in.</div>' +
+        '<input class="model-form-input" id="twofa-email-input" placeholder="Enter the 6-digit code" style="margin-top:14px;" maxlength="6">' +
+        '<button class="model-mini-btn primary" style="width:100%;margin-top:12px;" onclick="verifyServerEmailCode2FA()">Verify</button>' +
+        '<button class="model-mini-btn" style="width:100%;margin-top:8px;" onclick="resendServerEmailCode2FA()">Resend Code</button>';
+}
+
+async function verifyServerEmailCode2FA() {
+    const entered = document.getElementById('twofa-email-input').value.trim();
+    if (!entered) { showToast('Enter the code first'); return; }
+    try {
+        const data = await apiFetch('/api/2fa/verify', { method: 'POST', body: JSON.stringify({ pendingToken: _pendingServerToken, code: entered }) });
+        sessionToken = data.token;
+        localStorage.setItem('sonix_session_token', sessionToken);
+        closeModal('twofa-verify-modal');
+        await finishLogin(data.user);
+    } catch (e) {
+        showToast(e.message || 'Incorrect code');
+    }
+}
+
+async function resendServerEmailCode2FA() {
+    try {
+        const data = await apiFetch('/api/2fa/resend', { method: 'POST', body: JSON.stringify({ pendingToken: _pendingServerToken }) });
+        _pendingServerToken = data.pendingToken;
+        showToast('New code sent');
+    } catch (e) {
+        showToast(e.message || 'Could not resend code');
     }
 }
 
@@ -1867,12 +1910,6 @@ async function verifyBiometric2FA(twoFA) {
     }
 }
 
-function verifyEmailCode2FA() {
-    const entered = document.getElementById('twofa-email-input').value.trim();
-    if (entered === _pendingEmailCode) { closeModal('twofa-verify-modal'); finishLogin(_pendingLoginUser); }
-    else showToast('Incorrect code');
-}
-
 async function loadCloudSettings() {
     try {
         const data = await apiFetch('/api/settings');
@@ -1884,6 +1921,13 @@ async function loadCloudSettings() {
         if (cloudSettings.projects) projects = cloudSettings.projects;
         if (cloudSettings.profile && currentUser) Object.assign(currentUser, cloudSettings.profile);
         if (currentUser) currentUser.twoFA = cloudSettings.twoFA || { enabled: false };
+        // FIX: restore the "New Login Notification" toggle state from the server
+        // instead of it silently resetting to off on every load.
+        if (typeof cloudSettings.loginNotifications === 'boolean') {
+            if (!settings.securitySettings) settings.securitySettings = {};
+            settings.securitySettings.loginAlert = cloudSettings.loginNotifications;
+        }
+        applySettings(); // FIX: refresh toggle UI (2FA state, login-alert state) now that cloud values are in
     } catch (e) {
         showToast('Could not load your settings from the cloud');
     }
