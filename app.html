@@ -1101,6 +1101,16 @@
     <div id="twofa-verify-body"></div>
 </div>
 
+<!-- FIX: sign-in email code, now a normal in-page modal instead of window.prompt.
+     window.prompt can get silently cancelled by mobile browsers when the tab
+     loses focus — which happens exactly when a user switches to Gmail/Mail to
+     read the code, making sign-in look like it "gets cancelled." A modal is
+     just page state, so it survives switching apps and coming back. -->
+<div class="modal-base" id="signin-code-modal">
+    <h3 class="modal-title">CHECK YOUR EMAIL</h3>
+    <div id="signin-code-body"></div>
+</div>
+
 <!-- SIDEBAR -->
 <nav id="sidebar">
     <div class="sidebar-profile" onclick="openProfileFromSidebar()">
@@ -1360,25 +1370,66 @@ function getField(id) { const el = document.getElementById(id); return el ? el.v
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 function isValidEmail(email) { return EMAIL_RE.test(email); }
 
-// Sends a 6-digit code to the email, then repeatedly prompts (native browser
-// prompt) until a correct code is entered or the user cancels. Works for both
-// brand-new and returning users — the backend creates the account on first use.
+// FIX: was window.prompt-based — mobile browsers can silently kill a
+// window.prompt when the tab loses focus, which happens exactly when someone
+// switches away to their email app to read the code. Now uses an in-page
+// modal (signin-code-modal) instead, which is just normal page state and
+// survives switching apps and coming back.
+let _pendingSigninEmail = null, _pendingSigninNickname = null;
+
 async function requestAndVerifyEmailCode(email, nickname) {
+    _pendingSigninEmail = email;
+    _pendingSigninNickname = nickname;
     await apiFetch('/api/email-request', { method: 'POST', body: JSON.stringify({ email, nickname }) });
-    while (true) {
-        const code = window.prompt('We emailed a 6-digit code to ' + email + '. Enter it below:');
-        if (code === null) {
-            const resend = window.confirm('No code entered. Send a new code instead? (Cancel to stop)');
-            if (resend) { await apiFetch('/api/email-request', { method: 'POST', body: JSON.stringify({ email, nickname }) }); continue; }
-            return null;
-        }
-        try {
-            return await apiFetch('/api/email-verify', { method: 'POST', body: JSON.stringify({ email, code: code.trim() }) });
-        } catch (e) {
-            const retry = window.confirm((e.message || 'Invalid code') + '\n\nTry entering the code again?');
-            if (!retry) return null;
-        }
+    return new Promise((resolve) => {
+        _signinCodeResolve = resolve;
+        renderSigninCodeModal();
+        openModal('signin-code-modal');
+    });
+}
+
+let _signinCodeResolve = null;
+
+function renderSigninCodeModal(errorMsg) {
+    const body = document.getElementById('signin-code-body');
+    body.innerHTML =
+        '<div class="model-info-box" style="margin-bottom:12px;">We emailed a 6-digit code to <b>' + _escapeHtml(_pendingSigninEmail) + '</b>. It\'s fine to switch to your email app to grab it — come back here and enter it below.</div>' +
+        (errorMsg ? '<div style="color:#ff4444;font-size:0.78rem;margin-bottom:10px;">' + _escapeHtml(errorMsg) + '</div>' : '') +
+        '<input class="model-form-input" id="signin-code-input" placeholder="Enter the 6-digit code" maxlength="6" inputmode="numeric" autocomplete="one-time-code">' +
+        '<button class="model-mini-btn primary" style="width:100%;margin-top:12px;" onclick="submitSigninCode()">Verify</button>' +
+        '<button class="model-mini-btn" style="width:100%;margin-top:8px;" onclick="resendSigninCode()">Resend Code</button>' +
+        '<button class="model-mini-btn" style="width:100%;margin-top:8px;" onclick="cancelSigninCode()">Cancel</button>';
+    const input = document.getElementById('signin-code-input');
+    if (input) setTimeout(() => input.focus(), 100);
+}
+
+async function submitSigninCode() {
+    const input = document.getElementById('signin-code-input');
+    const code = input ? input.value.trim() : '';
+    if (!code) { renderSigninCodeModal('Enter the code first.'); return; }
+    try {
+        const data = await apiFetch('/api/email-verify', { method: 'POST', body: JSON.stringify({ email: _pendingSigninEmail, code }) });
+        closeModal('signin-code-modal');
+        const resolve = _signinCodeResolve; _signinCodeResolve = null;
+        if (resolve) resolve(data);
+    } catch (e) {
+        renderSigninCodeModal(e.message || 'Invalid code — try again.');
     }
+}
+
+async function resendSigninCode() {
+    try {
+        await apiFetch('/api/email-request', { method: 'POST', body: JSON.stringify({ email: _pendingSigninEmail, nickname: _pendingSigninNickname }) });
+        showToast('New code sent');
+    } catch (e) {
+        showToast(e.message || 'Could not resend code');
+    }
+}
+
+function cancelSigninCode() {
+    closeModal('signin-code-modal');
+    const resolve = _signinCodeResolve; _signinCodeResolve = null;
+    if (resolve) resolve(null);
 }
 
 async function handleEmailButton() {
@@ -3089,7 +3140,7 @@ function renderFileBubble({ dataUrl, fileName, fileSize, isImage, skipSave, ts }
         bubble.addEventListener('click', () => openFileViewer(dataUrl, fileName));
     } else {
         bubble.innerHTML = '<div style="font-size:1.6rem;font-weight:700;color:var(--accent);">DOC</div><div class="file-info"><div class="file-info-name">' + _escapeHtml(fileName) + '</div><div class="file-info-size">' + (fileSize/1024).toFixed(1) + ' KB</div></div>';
-        bubble.addEventListener('click', () => wrap.classList.toggle('show-actions'));
+        bubble.addEventListener('click', () => openOnlyMsgActions(wrap));
     }
 
     const moreBtn = document.createElement('button');
@@ -3097,7 +3148,7 @@ function renderFileBubble({ dataUrl, fileName, fileSize, isImage, skipSave, ts }
     moreBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>`;
     moreBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        wrap.classList.toggle('show-actions');
+        openOnlyMsgActions(wrap);
     });
     bubble.appendChild(moreBtn);
 
@@ -4249,7 +4300,7 @@ function addAIMessage(text, originalUserText, existingTs) {
 
     // Toggle actions on tap/click
     reply.addEventListener('click', () => {
-        wrap.classList.toggle('show-actions');
+        openOnlyMsgActions(wrap);
     });
 
     // Action buttons row
@@ -4560,7 +4611,7 @@ function renderVoiceBubble({ dataUrl, duration, transcript, skipSave, ts }) {
     const moreBtn = document.createElement('button');
     moreBtn.className = 'file-more-btn';
     moreBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>`;
-    moreBtn.addEventListener('click', (e) => { e.stopPropagation(); wrap.classList.toggle('show-actions'); });
+    moreBtn.addEventListener('click', (e) => { e.stopPropagation(); openOnlyMsgActions(wrap); });
 
     bubble.appendChild(playBtn);
     bubble.appendChild(waveform);
@@ -5063,6 +5114,23 @@ function importChat(input) {
 
 
 // ═══════════════════════════════
+// FIX: only one message action menu open at a time. Previously each bubble
+// type (AI / user / file) toggled its own .show-actions class independently,
+// so tapping bubble after bubble left several menus open — each needing its
+// own second tap to close. This closes every other one first.
+// ═══════════════════════════════
+function openOnlyMsgActions(wrap) {
+    document.querySelectorAll('.ai-msg-wrap.show-actions, .user-msg-wrap.show-actions, .file-msg-wrap.show-actions')
+        .forEach(el => { if (el !== wrap) el.classList.remove('show-actions'); });
+    wrap.classList.toggle('show-actions');
+}
+document.addEventListener('click', (e) => {
+    if (e.target.closest('.ai-msg-wrap, .user-msg-wrap, .file-msg-wrap')) return;
+    document.querySelectorAll('.ai-msg-wrap.show-actions, .user-msg-wrap.show-actions, .file-msg-wrap.show-actions')
+        .forEach(el => el.classList.remove('show-actions'));
+});
+
+// ═══════════════════════════════
 // ADD USER MESSAGE WITH ACTIONS
 // ═══════════════════════════════
 function addUserMessage(text, existingTs) {
@@ -5078,7 +5146,7 @@ function addUserMessage(text, existingTs) {
     bubble.style.maxWidth = '100%';
     bubble.style.alignSelf = 'unset';
 
-    bubble.addEventListener('click', () => wrap.classList.toggle('show-actions'));
+    bubble.addEventListener('click', () => openOnlyMsgActions(wrap));
 
     const actions = document.createElement('div');
     actions.className = 'user-actions';
