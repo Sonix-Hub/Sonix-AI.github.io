@@ -670,13 +670,10 @@
     </button>
 </div>
 
-<!-- NOTIFICATIONS MODAL — placeholder shell, real content pending the broadcast backend -->
+<!-- NOTIFICATIONS MODAL — content loaded live from the broadcast backend -->
 <div class="modal-base" id="notifications-modal">
     <h3 class="modal-title">NOTIFICATIONS</h3>
-    <div style="text-align:center;padding:30px 10px;color:#666;font-size:0.82rem;">
-        <div style="font-size:2rem;margin-bottom:8px;">🔔</div>
-        No notifications yet.<br>Updates and announcements will show up here.
-    </div>
+    <div id="notifications-body"></div>
     <button class="modal-close-btn" onclick="closeModal('notifications-modal')">Close</button>
 </div>
 
@@ -987,14 +984,7 @@
 <!-- SYSTEM MODELS MODAL -->
 <div class="modal-base" id="system-models-modal">
     <h3 class="modal-title">SYSTEM MODELS</h3>
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-        <a href="info.html#models" target="_blank" rel="noopener" class="model-mini-btn" style="flex:1;text-decoration:none;display:flex;align-items:center;justify-content:center;">Help</a>
-        <button class="model-mini-btn" style="flex:1;" onclick="openModal('ai-improvement-modal')">AI Improvement</button>
-    </div>
-    <div class="info-toggle" onclick="_toggleInfo(this);renderModelSuggestions();">
-        <span>💡 Suggested Models</span><span class="info-chevron">›</span>
-    </div>
-    <div id="model-suggestions-box" style="display:none;"></div>
+    <a href="info.html#models" target="_blank" rel="noopener" class="model-mini-btn" style="width:100%;text-decoration:none;display:flex;align-items:center;justify-content:center;margin-bottom:12px;">Help</a>
     <div id="model-list"></div>
     <button class="settings-acct-action-btn" style="justify-content:center;" onclick="openAddModelModal()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1025,9 +1015,24 @@
     </div>
     <div class="model-form-hint" style="color:#ffbf00;">⚠ Treat this like a password — anyone with your key can use your account. Never share it. A link alone is usually much safer to share than a key.</div>
 
+    <!-- NEW: not every API expects the key as an Authorization: Bearer header —
+         this was the actual blocker for several APIs before. Auto keeps the
+         old built-in guessing behavior so existing saved models don't change. -->
+    <div class="model-form-label">HOW SHOULD THE KEY BE SENT?</div>
+    <select class="model-form-input" id="mf-auth-type" onchange="_updateAuthTypeExtraField()">
+        <option value="auto">Auto-detect (default — works for most APIs)</option>
+        <option value="bearer">Authorization: Bearer &lt;key&gt;</option>
+        <option value="xapikey">x-api-key header</option>
+        <option value="header">Custom header name…</option>
+        <option value="query">URL query parameter…</option>
+        <option value="none">Don't send the key at all</option>
+    </select>
+    <input class="model-form-input" id="mf-auth-extra" style="display:none;margin-top:8px;" placeholder="e.g. X-Auth-Token or api_key">
+    <div class="model-form-hint" id="mf-auth-hint">If your model rejects the key with "unauthorized" even though it's correct, this is usually why — try a different option here.</div>
+
     <div class="setting-row" style="border-bottom:none;padding-top:14px;">
-        <div><div class="setting-label">Supports Images</div><div class="setting-sub">Let this model see photos you send it</div></div>
-        <div class="toggle-switch" id="mf-images-toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+        <div><div class="setting-label">Supports Files</div><div class="setting-sub">Let this model see photos and files you send it</div></div>
+        <div class="toggle-switch" id="mf-files-toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
     </div>
 
     <div id="mf-error" class="model-err-text"></div>
@@ -2050,6 +2055,7 @@ function startApp(guest = false) {
     if (inboxItem) inboxItem.style.display = (!guest && !isGuest) ? 'flex' : 'none';
     const notifItem = document.getElementById('notifications-menu-item');
     if (notifItem) notifItem.style.display = (!guest && !isGuest) ? 'flex' : 'none';
+    if (!guest && !isGuest) updateNotificationsBadge();
     checkBirthday();
 
     if (guest) {
@@ -2821,7 +2827,56 @@ function openNotifications() {
     if (isGuest) { showToast('Login to see notifications'); return; }
     const isMenuOpen = document.getElementById('app-body').classList.contains('menu-open');
     if (isMenuOpen) toggleMenu();
-    setTimeout(() => { openModal('notifications-modal'); }, isMenuOpen ? 420 : 0);
+    setTimeout(() => { openModal('notifications-modal'); loadNotifications(); }, isMenuOpen ? 420 : 0);
+}
+
+async function loadNotifications() {
+    const body = document.getElementById('notifications-body');
+    body.innerHTML = '<div style="text-align:center;padding:20px 10px;color:#666;font-size:0.8rem;">Loading…</div>';
+    try {
+        const data = await apiFetch('/api/notifications', { method: 'GET' });
+        const items = data.notifications || [];
+        if (!items.length) {
+            body.innerHTML = '<div style="text-align:center;padding:30px 10px;color:#666;font-size:0.82rem;">' +
+                '<div style="font-size:2rem;margin-bottom:8px;">🔔</div>No notifications yet.<br>Updates and announcements will show up here.</div>';
+            return;
+        }
+        body.innerHTML = items.map(n => {
+            let mediaHtml = '';
+            if (n.kind === 'image' && n.media_key) mediaHtml = '<img src="' + API_BASE + '/media/' + n.media_key + '" style="width:100%;border-radius:10px;margin-top:8px;">';
+            else if (n.kind === 'video' && n.media_key) mediaHtml = '<video src="' + API_BASE + '/media/' + n.media_key + '" controls style="width:100%;border-radius:10px;margin-top:8px;"></video>';
+            else if (n.kind === 'file' && n.media_key) mediaHtml = '<a href="' + API_BASE + '/media/' + n.media_key + '" target="_blank" rel="noopener" class="model-mini-btn" style="display:inline-block;margin-top:8px;text-decoration:none;">Download File</a>';
+            else if (n.kind === 'link' && n.link_url) mediaHtml = '<a href="' + _escHtml(n.link_url) + '" target="_blank" rel="noopener" class="model-mini-btn" style="display:inline-block;margin-top:8px;text-decoration:none;">Open Link</a>';
+            return '<div class="notif-item" style="border:1px solid ' + (n.is_read ? '#1a1a1a' : 'rgba(0,255,65,0.3)') + ';border-radius:12px;padding:12px 14px;margin-bottom:10px;" onclick="markNotificationRead(\'' + n.id + '\', this)">' +
+                (n.title ? '<div style="font-weight:700;font-size:0.85rem;">' + _escHtml(n.title) + '</div>' : '') +
+                (n.body ? '<div style="font-size:0.8rem;color:#aaa;margin-top:4px;">' + _escHtml(n.body) + '</div>' : '') +
+                mediaHtml +
+                '<div style="font-size:0.66rem;color:#555;margin-top:8px;">' + new Date(n.publish_at).toLocaleString() + '</div>' +
+                '</div>';
+        }).join('');
+        updateNotificationsBadge();
+    } catch (e) {
+        body.innerHTML = '<div style="text-align:center;padding:20px;color:#ff4444;font-size:0.8rem;">Could not load notifications.</div>';
+    }
+}
+
+async function markNotificationRead(id, el) {
+    if (el) el.style.borderColor = '#1a1a1a';
+    try {
+        await apiFetch('/api/notifications/' + id + '/read', { method: 'POST' });
+        updateNotificationsBadge();
+    } catch (e) {}
+}
+
+async function updateNotificationsBadge() {
+    const badge = document.getElementById('notifications-badge');
+    if (!badge || isGuest) return;
+    try {
+        const data = await apiFetch('/api/notifications', { method: 'GET' });
+        const unread = (data.notifications || []).filter(n => !n.is_read).length;
+        badge.textContent = unread > 9 ? '9+' : String(unread);
+        badge.style.display = unread > 0 ? 'inline-block' : 'none';
+    } catch (e) {}
 }
 
 function switchInboxTab(tab) {
@@ -3490,7 +3545,7 @@ function renderSystemModels() {
                 '<div class="model-dot ' + dotClass + '" onclick="useModel(\'' + m.id + '\')" title="Use this model"></div>' +
                 '<div style="flex:1;overflow:hidden;">' +
                     '<div class="model-card-name">' + _escHtml(m.name) + '</div>' +
-                    '<div class="model-card-sub">' + (m.supportsImages ? 'Text + Images' : 'Text only') + ' &middot; ' + (m.key ? 'Key saved' : 'No key') + '</div>' +
+                    '<div class="model-card-sub">' + ((m.supportsFiles || m.supportsImages) ? 'Text + Files' : 'Text only') + ' &middot; ' + (m.key ? 'Key saved' : 'No key') + '</div>' +
                 '</div>' +
             '</div>' +
             statusLine +
@@ -3572,6 +3627,15 @@ function toggleKeyVisibility() {
         : '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.6 20.6 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a20.64 20.64 0 0 1-3.22 4.53M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
 }
 
+function _updateAuthTypeExtraField() {
+    const type = document.getElementById('mf-auth-type').value;
+    const extra = document.getElementById('mf-auth-extra');
+    const hint = document.getElementById('mf-auth-hint');
+    if (type === 'header') { extra.style.display = 'block'; extra.placeholder = 'Header name, e.g. X-Auth-Token'; hint.textContent = 'The key will be sent as this exact header name.'; }
+    else if (type === 'query') { extra.style.display = 'block'; extra.placeholder = 'Query param name, e.g. api_key'; hint.textContent = 'The key will be appended to the URL as ?paramname=key.'; }
+    else { extra.style.display = 'none'; hint.textContent = 'If your model rejects the key with "unauthorized" even though it\'s correct, this is usually why — try a different option here.'; }
+}
+
 function openAddModelModal(id) {
     document.getElementById('mf-error').classList.remove('show');
     document.getElementById('mf-key').type = 'password';
@@ -3584,15 +3648,20 @@ function openAddModelModal(id) {
         document.getElementById('mf-name').value = m.name;
         document.getElementById('mf-endpoint').value = m.endpoint;
         document.getElementById('mf-key').value = m.key || '';
-        document.getElementById('mf-images-toggle').classList.toggle('on', !!m.supportsImages);
+        document.getElementById('mf-files-toggle').classList.toggle('on', !!(m.supportsFiles || m.supportsImages));
+        document.getElementById('mf-auth-type').value = m.authType || 'auto';
+        document.getElementById('mf-auth-extra').value = m.authExtra || '';
     } else {
         document.getElementById('model-form-title').textContent = 'ADD MODEL';
         document.getElementById('mf-id').value = '';
         document.getElementById('mf-name').value = '';
         document.getElementById('mf-endpoint').value = '';
         document.getElementById('mf-key').value = '';
-        document.getElementById('mf-images-toggle').classList.remove('on');
+        document.getElementById('mf-files-toggle').classList.remove('on');
+        document.getElementById('mf-auth-type').value = 'auto';
+        document.getElementById('mf-auth-extra').value = '';
     }
+    _updateAuthTypeExtraField();
     switchModal('system-models-modal', 'model-form-modal');
 }
 
@@ -3601,12 +3670,19 @@ function saveModelForm() {
     let name = document.getElementById('mf-name').value.trim();
     const endpoint = document.getElementById('mf-endpoint').value.trim();
     const key = document.getElementById('mf-key').value.trim();
-    const supportsImages = document.getElementById('mf-images-toggle').classList.contains('on');
+    const supportsFiles = document.getElementById('mf-files-toggle').classList.contains('on');
+    const authType = document.getElementById('mf-auth-type').value;
+    const authExtra = document.getElementById('mf-auth-extra').value.trim();
     const errEl = document.getElementById('mf-error');
     errEl.classList.remove('show');
 
     if (!endpoint) {
         errEl.textContent = '⚠ Please paste an API link for this model — that\'s the only thing required.';
+        errEl.classList.add('show');
+        return;
+    }
+    if ((authType === 'header' || authType === 'query') && !authExtra) {
+        errEl.textContent = '⚠ Enter the ' + (authType === 'header' ? 'header name' : 'query parameter name') + ' for the key.';
         errEl.classList.add('show');
         return;
     }
@@ -3616,9 +3692,9 @@ function saveModelForm() {
     if (idField) {
         model = systemModels.find(x => x.id === idField);
         if (!model) return;
-        model.name = name; model.endpoint = endpoint; model.key = key; model.supportsImages = supportsImages;
+        model.name = name; model.endpoint = endpoint; model.key = key; model.supportsFiles = supportsFiles; model.authType = authType; model.authExtra = authExtra;
     } else {
-        model = { id: 'model_' + Date.now(), name, endpoint, key, supportsImages, status: 'unknown', lastError: '' };
+        model = { id: 'model_' + Date.now(), name, endpoint, key, supportsFiles, authType, authExtra, status: 'unknown', lastError: '' };
         systemModels.push(model);
     }
     saveSystemModels();
@@ -3662,6 +3738,29 @@ function testModelConnection(id) {
     });
 }
 
+// NEW: applies the key however the user picked in "How should the key be
+// sent?" — returns the endpoint to actually fetch (query-param auth changes
+// it, others leave it as-is). Returns null when authType is 'auto', so the
+// caller falls through to the old per-API hardcoded guessing behavior —
+// this keeps every already-saved model working exactly as before.
+function applyModelAuth(model, headers, endpoint) {
+    if (!model.key) return endpoint;
+    const type = model.authType || 'auto';
+    if (type === 'auto') return null;
+    if (type === 'bearer') { headers['Authorization'] = 'Bearer ' + model.key; return endpoint; }
+    if (type === 'xapikey') { headers['x-api-key'] = model.key; return endpoint; }
+    if (type === 'header') { headers[model.authExtra || 'X-API-Key'] = model.key; return endpoint; }
+    if (type === 'query') {
+        try {
+            const u = new URL(endpoint);
+            u.searchParams.set(model.authExtra || 'key', model.key);
+            return u.toString();
+        } catch (e) { return endpoint; }
+    }
+    if (type === 'none') return endpoint;
+    return null;
+}
+
 // Generic caller for a user-provided model endpoint. Sends an OpenAI-style
 // chat/completions request and reads several common response shapes so it
 // has the best shot at working with most third-party APIs and proxies.
@@ -3672,6 +3771,7 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
     const priorTurns = history || [];
 
     let body, headers = { 'Content-Type': 'application/json' };
+    let requestEndpoint = model.endpoint;
 
     if (isGemini) {
         // Gemini speaks a completely different dialect than OpenAI-style APIs:
@@ -3679,7 +3779,7 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         // not an Authorization: Bearer token.
         const parts = [];
         if (text) parts.push({ text: text });
-        if (model.supportsImages && images && images.length) {
+        if ((model.supportsFiles || model.supportsImages) && images && images.length) {
             images.forEach(imgDataUrl => {
                 const m = imgDataUrl.match(/^data:(image\/[a-z+]+);base64,(.+)$/i);
                 if (m) parts.push({ inline_data: { mime_type: m[1], data: m[2] } });
@@ -3688,7 +3788,9 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         const priorContents = priorTurns.map(t => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] }));
         body = { contents: [...priorContents, { role: 'user', parts: parts.length ? parts : [{ text: text || 'Hello' }] }] };
         if (systemPrompt) body.system_instruction = { parts: [{ text: systemPrompt }] };
-        if (model.key) headers['x-goog-api-key'] = model.key;
+        const overridden = applyModelAuth(model, headers, requestEndpoint);
+        if (overridden !== null) requestEndpoint = overridden;
+        else if (model.key) headers['x-goog-api-key'] = model.key;
 
     } else if (isOpenAIResponses) {
         // OpenAI's newer /v1/responses API — a different shape from
@@ -3696,7 +3798,7 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         // separate top-level 'instructions' field instead of a system message.
         const contentParts = [];
         if (text) contentParts.push({ type: 'input_text', text: text });
-        if (model.supportsImages && images && images.length) {
+        if ((model.supportsFiles || model.supportsImages) && images && images.length) {
             images.forEach(imgDataUrl => contentParts.push({ type: 'input_image', image_url: imgDataUrl }));
         }
         const priorInput = priorTurns.map(t => ({ role: t.role, content: t.content }));
@@ -3706,12 +3808,14 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
             input: priorInput.length ? [...priorInput, currentTurn] : (contentParts.length > 1 ? [currentTurn] : (text || 'Hello')),
         };
         if (systemPrompt) body.instructions = systemPrompt;
-        if (model.key) headers['Authorization'] = 'Bearer ' + model.key;
+        const overriddenR = applyModelAuth(model, headers, requestEndpoint);
+        if (overriddenR !== null) requestEndpoint = overriddenR;
+        else if (model.key) headers['Authorization'] = 'Bearer ' + model.key;
 
     } else {
         const content = [];
         if (text) content.push({ type: 'text', text: text });
-        if (model.supportsImages && images && images.length) {
+        if ((model.supportsFiles || model.supportsImages) && images && images.length) {
             images.forEach(imgDataUrl => content.push({ type: 'image_url', image_url: { url: imgDataUrl } }));
         }
         const messages = [];
@@ -3719,7 +3823,9 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         priorTurns.forEach(t => messages.push({ role: t.role, content: t.content }));
         messages.push({ role: 'user', content: content.length > 1 ? content : (text || 'Hello') });
         body = { model: model.name || 'default', messages, max_tokens: 1000 };
-        if (model.key) {
+        const overriddenD = applyModelAuth(model, headers, requestEndpoint);
+        if (overriddenD !== null) requestEndpoint = overriddenD;
+        else if (model.key) {
             headers['Authorization'] = 'Bearer ' + model.key;
             headers['x-api-key'] = model.key;
         }
@@ -3727,7 +3833,7 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
 
     let res;
     try {
-        res = await fetch(model.endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+        res = await fetch(requestEndpoint, { method: 'POST', headers, body: JSON.stringify(body) });
     } catch (e) {
         const geminiNote = isGemini ? ' Gemini specifically is known to block a lot of direct browser calls this way — Google\'s own AI Studio has to run its own proxy server to work around it, so this may not be fixable from a browser-only app at all.' : '';
         throw new Error('Network/CORS error — the browser blocked reading the response. This can happen even when the API itself is working: it usually means the server doesn\'t send the CORS headers browsers require for cross-site requests. That\'s a setting on the API\'s side, not something this app can bypass.' + geminiNote);
@@ -3885,7 +3991,7 @@ function _activeModelSupportsImages() {
     if (activeModelId === 'sonix-core') return false;   // pattern engine, no vision
     if (activeModelId === 'devtoolbox-free') return false; // text-only free model
     const model = systemModels.find(m => m.id === activeModelId);
-    return !!(model && model.supportsImages);
+    return !!(model && (model.supportsFiles || model.supportsImages));
 }
 
 function showCapabilityNote(text) {
