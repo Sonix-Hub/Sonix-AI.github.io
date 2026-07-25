@@ -1033,7 +1033,23 @@
 
     <div class="model-form-label">API ENDPOINT (LINK)</div>
     <input class="model-form-input" id="mf-endpoint" type="text" placeholder="https://api.example.com/v1/chat/completions">
-    <div class="model-form-hint">Paste the chat-completion URL of the AI you want to connect.</div>
+    <div class="model-form-hint">Paste the base API link — e.g. https://api.groq.com/openai/v1 — or the full chat-completion URL.</div>
+
+    <!-- NEW: was previously conflated with the display Name above, which
+         broke providers where the label you want to see and the exact
+         model-id string the API expects are different (e.g. Groq's
+         "openai/gpt-oss-120b"). -->
+    <div class="model-form-label">MODEL ID <span style="color:#444;">(optional)</span></div>
+    <input class="model-form-input" id="mf-model-id" type="text" placeholder="e.g. openai/gpt-oss-120b — leave blank to use the name above">
+    <div class="model-form-hint">The exact model string the API expects in the request body. If your provider's docs show a "model" field, this is it.</div>
+
+    <div class="model-form-label">ENDPOINT PATH <span style="color:#444;">(optional)</span></div>
+    <select class="model-form-input" id="mf-endpoint-path">
+        <option value="auto">Auto (use the link above as-is)</option>
+        <option value="/chat/completions">/chat/completions</option>
+        <option value="/responses">/responses</option>
+    </select>
+    <div class="model-form-hint">If you pasted just a base URL above (like Groq's), pick the path here instead of typing the whole thing.</div>
 
     <div class="model-form-label">API KEY <span style="color:#444;">(optional)</span></div>
     <div style="position:relative;">
@@ -1058,6 +1074,18 @@
     </select>
     <input class="model-form-input" id="mf-auth-extra" style="display:none;margin-top:8px;" placeholder="e.g. X-Auth-Token or api_key">
     <div class="model-form-hint" id="mf-auth-hint">If your model rejects the key with "unauthorized" even though it's correct, this is usually why — try a different option here.</div>
+
+    <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+            <div class="model-form-label">TEMPERATURE <span style="color:#444;">(optional)</span></div>
+            <input class="model-form-input" id="mf-temperature" type="number" step="0.1" min="0" max="2" placeholder="e.g. 0.2">
+        </div>
+        <div style="flex:1;">
+            <div class="model-form-label">TOP P <span style="color:#444;">(optional)</span></div>
+            <input class="model-form-input" id="mf-top-p" type="number" step="0.1" min="0" max="1" placeholder="e.g. 1.0">
+        </div>
+    </div>
+    <div class="model-form-hint">Leave both blank to use the provider's default. Lower temperature (e.g. 0.2) tends to work better for coding.</div>
 
     <div class="setting-row" style="border-bottom:none;padding-top:14px;">
         <div><div class="setting-label">Supports Files</div><div class="setting-sub">Let this model see photos and files you send it</div></div>
@@ -1367,10 +1395,10 @@ function saveSettings() {
 }
 
 let _settingsSyncTimeout = null;
-function syncSettingsToCloud() {
+function syncSettingsToCloud(immediate) {
     if (isGuest || !sessionToken) return;
     clearTimeout(_settingsSyncTimeout);
-    _settingsSyncTimeout = setTimeout(async () => {
+    const doSync = async () => {
         try {
             await apiFetch('/api/settings', {
                 method: 'POST',
@@ -1391,7 +1419,14 @@ function syncSettingsToCloud() {
                 })
             });
         } catch (e) { /* will retry on the next change; the local cache still works meanwhile */ }
-    }, 600);
+    };
+    // FIX: model add/edit/delete used to go through the same 600ms debounce
+    // as every minor settings tweak — if the tab closed or reloaded inside
+    // that window, the change never reached the server and the old model
+    // list came right back on next load. Callers that pass immediate=true
+    // (model save/delete) skip the debounce and flush right away.
+    if (immediate) { doSync(); return; }
+    _settingsSyncTimeout = setTimeout(doSync, 600);
 }
 
 function applySettings() {
@@ -3390,8 +3425,8 @@ function closeFileViewer() { document.getElementById('file-viewer').classList.re
 let systemModels = []; // populated from the cloud right after login
 let activeModelId = 'sonix-core';
 
-function saveSystemModels() {
-    syncSettingsToCloud();
+function saveSystemModels(immediate) {
+    syncSettingsToCloud(immediate);
 }
 
 // ============================================================
@@ -3618,7 +3653,7 @@ function renderSystemModels() {
                 '<div class="model-dot ' + dotClass + '" onclick="useModel(\'' + m.id + '\')" title="Use this model"></div>' +
                 '<div style="flex:1;overflow:hidden;">' +
                     '<div class="model-card-name">' + _escHtml(m.name) + '</div>' +
-                    '<div class="model-card-sub">' + ((m.supportsFiles || m.supportsImages) ? 'Text + Files' : 'Text only') + ' &middot; ' + (m.key ? 'Key saved' : 'No key') + '</div>' +
+                    '<div class="model-card-sub">' + ((m.supportsFiles || m.supportsImages) ? 'Text + Files' : 'Text only') + ' &middot; ' + (m.key ? 'Key saved' : 'No key') + (m.totalTokensUsed ? ' &middot; ' + m.totalTokensUsed.toLocaleString() + ' tokens used' : '') + '</div>' +
                 '</div>' +
             '</div>' +
             statusLine +
@@ -3720,6 +3755,10 @@ function openAddModelModal(id) {
         document.getElementById('mf-id').value = m.id;
         document.getElementById('mf-name').value = m.name;
         document.getElementById('mf-endpoint').value = m.endpoint;
+        document.getElementById('mf-model-id').value = m.modelId || '';
+        document.getElementById('mf-endpoint-path').value = m.endpointPath || 'auto';
+        document.getElementById('mf-temperature').value = (m.temperature !== undefined && m.temperature !== null) ? m.temperature : '';
+        document.getElementById('mf-top-p').value = (m.topP !== undefined && m.topP !== null) ? m.topP : '';
         document.getElementById('mf-key').value = m.key || '';
         document.getElementById('mf-files-toggle').classList.toggle('on', !!(m.supportsFiles || m.supportsImages));
         document.getElementById('mf-auth-type').value = m.authType || 'auto';
@@ -3729,6 +3768,10 @@ function openAddModelModal(id) {
         document.getElementById('mf-id').value = '';
         document.getElementById('mf-name').value = '';
         document.getElementById('mf-endpoint').value = '';
+        document.getElementById('mf-model-id').value = '';
+        document.getElementById('mf-endpoint-path').value = 'auto';
+        document.getElementById('mf-temperature').value = '';
+        document.getElementById('mf-top-p').value = '';
         document.getElementById('mf-key').value = '';
         document.getElementById('mf-files-toggle').classList.remove('on');
         document.getElementById('mf-auth-type').value = 'auto';
@@ -3742,6 +3785,10 @@ function saveModelForm() {
     const idField = document.getElementById('mf-id').value;
     let name = document.getElementById('mf-name').value.trim();
     const endpoint = document.getElementById('mf-endpoint').value.trim();
+    const modelId = document.getElementById('mf-model-id').value.trim();
+    const endpointPath = document.getElementById('mf-endpoint-path').value;
+    const temperature = document.getElementById('mf-temperature').value.trim();
+    const topP = document.getElementById('mf-top-p').value.trim();
     const key = document.getElementById('mf-key').value.trim();
     const supportsFiles = document.getElementById('mf-files-toggle').classList.contains('on');
     const authType = document.getElementById('mf-auth-type').value;
@@ -3765,12 +3812,19 @@ function saveModelForm() {
     if (idField) {
         model = systemModels.find(x => x.id === idField);
         if (!model) return;
-        model.name = name; model.endpoint = endpoint; model.key = key; model.supportsFiles = supportsFiles; model.authType = authType; model.authExtra = authExtra;
+        model.name = name; model.endpoint = endpoint; model.modelId = modelId; model.endpointPath = endpointPath;
+        model.temperature = temperature; model.topP = topP;
+        model.key = key; model.supportsFiles = supportsFiles; model.authType = authType; model.authExtra = authExtra;
     } else {
-        model = { id: 'model_' + Date.now(), name, endpoint, key, supportsFiles, authType, authExtra, status: 'unknown', lastError: '' };
+        model = { id: 'model_' + Date.now(), name, endpoint, modelId, endpointPath, temperature, topP, key, supportsFiles, authType, authExtra, status: 'unknown', lastError: '' };
         systemModels.push(model);
     }
-    saveSystemModels();
+    // FIX: was debounced (600ms) like every other setting change — fine for
+    // typing preferences, but if someone saved/deleted a model then closed
+    // or reloaded the tab within that window, the change never reached the
+    // server and the old list came right back on next load. Model add/edit/
+    // delete now flushes immediately instead of waiting on the debounce.
+    saveSystemModels(true);
     switchModal('model-form-modal', 'system-models-modal');
     showToast('Model saved — testing connection in background…');
     testModelConnection(model.id);
@@ -3784,7 +3838,7 @@ function deleteModel(id) {
             activeModelId = 'sonix-core';
             showToast('Switched back to SONIX Core');
         }
-        saveSystemModels();
+        saveSystemModels(true);
         renderSystemModels();
     });
 }
@@ -3839,12 +3893,28 @@ function applyModelAuth(model, headers, endpoint) {
 // has the best shot at working with most third-party APIs and proxies.
 async function callCustomModel(model, text, images, systemPrompt, history) {
     if (!model.endpoint) throw new Error('No API link set for this model.');
-    const isGemini = /generativelanguage\.googleapis\.com/i.test(model.endpoint);
-    const isOpenAIResponses = /api\.openai\.com\/v1\/responses/i.test(model.endpoint);
+
+    // NEW: optional explicit endpoint path (e.g. picking "/responses" instead
+    // of relying on URL-pattern guessing) — appended onto the base URL.
+    let effectiveEndpoint = model.endpoint;
+    if (model.endpointPath && model.endpointPath !== 'auto') {
+        const base = model.endpoint.replace(/\/+$/, '');
+        effectiveEndpoint = base.endsWith(model.endpointPath) ? base : base + model.endpointPath;
+    }
+
+    const isGemini = /generativelanguage\.googleapis\.com/i.test(effectiveEndpoint);
+    const isOpenAIResponses = model.endpointPath === '/responses' || /\/responses(\?|$)/i.test(effectiveEndpoint);
     const priorTurns = history || [];
+    // NEW: Model ID (the literal string the API expects, e.g. "openai/gpt-oss-120b")
+    // is now separate from the display Name — falls back to name for models
+    // saved before this field existed.
+    const modelId = model.modelId || model.name || 'default';
+    // NEW: optional generation params
+    const temperature = (model.temperature !== undefined && model.temperature !== null && model.temperature !== '') ? parseFloat(model.temperature) : null;
+    const topP = (model.topP !== undefined && model.topP !== null && model.topP !== '') ? parseFloat(model.topP) : null;
 
     let body, headers = { 'Content-Type': 'application/json' };
-    let requestEndpoint = model.endpoint;
+    let requestEndpoint = effectiveEndpoint;
 
     if (isGemini) {
         // Gemini speaks a completely different dialect than OpenAI-style APIs:
@@ -3861,6 +3931,11 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         const priorContents = priorTurns.map(t => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] }));
         body = { contents: [...priorContents, { role: 'user', parts: parts.length ? parts : [{ text: text || 'Hello' }] }] };
         if (systemPrompt) body.system_instruction = { parts: [{ text: systemPrompt }] };
+        if (temperature !== null || topP !== null) {
+            body.generationConfig = {};
+            if (temperature !== null) body.generationConfig.temperature = temperature;
+            if (topP !== null) body.generationConfig.topP = topP;
+        }
         const overridden = applyModelAuth(model, headers, requestEndpoint);
         if (overridden !== null) requestEndpoint = overridden;
         else if (model.key) headers['x-goog-api-key'] = model.key;
@@ -3877,10 +3952,12 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         const priorInput = priorTurns.map(t => ({ role: t.role, content: t.content }));
         const currentTurn = { role: 'user', content: contentParts.length > 1 ? contentParts : (text || 'Hello') };
         body = {
-            model: model.name || 'gpt-4o',
+            model: modelId,
             input: priorInput.length ? [...priorInput, currentTurn] : (contentParts.length > 1 ? [currentTurn] : (text || 'Hello')),
         };
         if (systemPrompt) body.instructions = systemPrompt;
+        if (temperature !== null) body.temperature = temperature;
+        if (topP !== null) body.top_p = topP;
         const overriddenR = applyModelAuth(model, headers, requestEndpoint);
         if (overriddenR !== null) requestEndpoint = overriddenR;
         else if (model.key) headers['Authorization'] = 'Bearer ' + model.key;
@@ -3895,7 +3972,9 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
         if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
         priorTurns.forEach(t => messages.push({ role: t.role, content: t.content }));
         messages.push({ role: 'user', content: content.length > 1 ? content : (text || 'Hello') });
-        body = { model: model.name || 'default', messages, max_tokens: 1000 };
+        body = { model: modelId, messages, max_tokens: 1000 };
+        if (temperature !== null) body.temperature = temperature;
+        if (topP !== null) body.top_p = topP;
         const overriddenD = applyModelAuth(model, headers, requestEndpoint);
         if (overriddenD !== null) requestEndpoint = overriddenD;
         else if (model.key) {
@@ -3946,11 +4025,21 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
             data.reply || data.message || data.text;
     }
 
+    // NEW: capture token usage when the API reports it — OpenAI-style
+    // (usage.prompt_tokens/completion_tokens/total_tokens) or Gemini-style
+    // (usageMetadata.*TokenCount). Never estimated/fabricated when absent.
+    let usage = null;
+    if (data.usage && (data.usage.total_tokens !== undefined || data.usage.prompt_tokens !== undefined)) {
+        usage = { prompt: data.usage.prompt_tokens || 0, completion: data.usage.completion_tokens || 0, total: data.usage.total_tokens || ((data.usage.prompt_tokens||0)+(data.usage.completion_tokens||0)) };
+    } else if (data.usageMetadata) {
+        usage = { prompt: data.usageMetadata.promptTokenCount || 0, completion: data.usageMetadata.candidatesTokenCount || 0, total: data.usageMetadata.totalTokenCount || 0 };
+    }
+
     // Best-effort support for models that generate an image back
     const imageUrl = (data.data && data.data[0] && data.data[0].url) || data.image_url || data.image;
 
-    if (imageUrl) return { type: 'image', url: imageUrl, text: (typeof reply === 'string') ? reply : '' };
-    if (typeof reply === 'string' && reply.trim()) return { type: 'text', text: reply };
+    if (imageUrl) return { type: 'image', url: imageUrl, text: (typeof reply === 'string') ? reply : '', usage };
+    if (typeof reply === 'string' && reply.trim()) return { type: 'text', text: reply, usage };
 
     throw new Error('Model responded, but in an unrecognized format.');
 }
@@ -4084,10 +4173,26 @@ async function getAIReply(text, images) {
                 const result = await callCustomModel(model, text, images || [], improvementPrompt, history);
                 model.status = 'ok';
                 model.lastError = '';
+                // NEW: accumulate token usage, when the API actually reports it —
+                // per-model lifetime total (for comparing models) and per-session
+                // total (for "how much has this conversation used"). Never
+                // estimated when the API doesn't return usage data.
+                let usageDetail = '';
+                if (result.usage && result.usage.total) {
+                    model.totalTokensUsed = (model.totalTokensUsed || 0) + result.usage.total;
+                    const s = sessions.find(x => x.id === currentSessionId);
+                    if (s) {
+                        s.tokenUsage = s.tokenUsage || { prompt: 0, completion: 0, total: 0 };
+                        s.tokenUsage.prompt += result.usage.prompt;
+                        s.tokenUsage.completion += result.usage.completion;
+                        s.tokenUsage.total += result.usage.total;
+                    }
+                    usageDetail = result.usage.total + ' tokens';
+                }
                 saveSystemModels();
                 log.completeStep('request');
                 log.addStep('final', 'Done');
-                log.completeStep('final');
+                log.completeStep('final', usageDetail);
                 return result;
             } catch (e) {
                 log.completeStep('request', 'failed');
