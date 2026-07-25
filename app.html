@@ -190,6 +190,28 @@
         .user { align-self: flex-end; background: var(--user-bubble); color: var(--text-user); font-weight: 600; border-bottom-right-radius: 5px; white-space: pre-wrap; }
         .system-msg { align-self: center; color: #333; font-size: 0.72rem; letter-spacing: 1px; padding: 4px 0; }
         .typing-bubble { align-self: flex-start; background: none; border: none; padding: 10px 4px; display: none; }
+
+        /* NEW: process log — shows real steps (search, request, thinking) as
+           they happen, styled like a connected timeline (icon + vertical line). */
+        .process-log-wrap { align-self: flex-start; max-width: 85%; margin: 6px 0; }
+        .process-log-steps { display: flex; flex-direction: column; }
+        .process-step { display: flex; gap: 10px; position: relative; padding-bottom: 14px; }
+        .process-step:last-child { padding-bottom: 0; }
+        .process-step:not(:last-child)::before {
+            content: ''; position: absolute; left: 13px; top: 28px; bottom: 0; width: 1px; background: #262626;
+        }
+        .process-step-icon {
+            width: 26px; height: 26px; border-radius: 50%; background: #141414; border: 1px solid #2a2a2a;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #666; transition: 0.3s;
+        }
+        .process-step-icon svg { width: 13px; height: 13px; }
+        .process-step.pending .process-step-icon { border-color: var(--accent); color: var(--accent); animation: stepPulse 1.2s infinite; }
+        .process-step.done .process-step-icon { border-color: #333; color: #555; }
+        @keyframes stepPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .process-step-body { padding-top: 3px; }
+        .process-step-label { font-size: 0.76rem; color: #999; }
+        .process-step.pending .process-step-label { color: #ccc; }
+        .process-step-time { font-size: 0.66rem; color: #555; margin-top: 1px; }
         .typing-dots { display: flex; gap: 5px; }
         .typing-dots span { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: blink 1.2s infinite; }
         .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -3970,9 +3992,74 @@ function _buildConversationHistory(maxTurns) {
     return capped.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
 }
 
+// NEW: process log — a live, honest timeline of what's actually happening
+// for this reply (real search calls, real API requests, real elapsed time).
+// Not decorative: each step only appears when that thing genuinely occurs.
+function _processStepIcon(key) {
+    const icons = {
+        find:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+        preview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+        request: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+        thought: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
+        final:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>',
+    };
+    return icons[key] || icons.thought;
+}
+
+function startProcessLog() {
+    const chat = document.getElementById('chat-window');
+    const typing = document.getElementById('typing-indicator');
+    const wrap = document.createElement('div');
+    wrap.className = 'process-log-wrap';
+    wrap.innerHTML = '<div class="process-log-steps"></div>';
+    chat.insertBefore(wrap, typing);
+    chat.scrollTop = chat.scrollHeight;
+
+    const stepsEl = wrap.querySelector('.process-log-steps');
+    const stepEls = {};
+    const startTimes = {};
+
+    function addStep(key, label) {
+        if (stepEls[key]) return; // don't duplicate the same step type
+        startTimes[key] = Date.now();
+        const el = document.createElement('div');
+        el.className = 'process-step pending';
+        el.innerHTML = '<div class="process-step-icon">' + _processStepIcon(key) + '</div>' +
+            '<div class="process-step-body"><div class="process-step-label">' + _escHtml(label) + '</div><div class="process-step-time"></div></div>';
+        stepsEl.appendChild(el);
+        stepEls[key] = el;
+        chat.scrollTop = chat.scrollHeight;
+    }
+    function completeStep(key, detail) {
+        const el = stepEls[key];
+        if (!el) return;
+        el.classList.remove('pending'); el.classList.add('done');
+        const elapsed = ((Date.now() - startTimes[key]) / 1000).toFixed(1);
+        const timeEl = el.querySelector('.process-step-time');
+        if (timeEl) timeEl.textContent = elapsed + 's' + (detail ? ' — ' + detail : '');
+    }
+    function remove() { wrap.remove(); }
+    return { addStep, completeStep, remove };
+}
+
 // Routes a message to whichever model is currently selected
 async function getAIReply(text, images) {
-    if (activeModelId === 'devtoolbox-free') return await callDevToolBoxModel(text);
+    const log = startProcessLog();
+
+    if (activeModelId === 'devtoolbox-free') {
+        log.addStep('request', 'Requesting DevToolBox…');
+        try {
+            const result = await callDevToolBoxModel(text);
+            log.completeStep('request');
+            log.addStep('final', 'Done');
+            log.completeStep('final');
+            return result;
+        } catch (e) {
+            log.completeStep('request', 'failed');
+            throw e;
+        }
+    }
+
     if (activeModelId && activeModelId !== 'sonix-core') {
         const model = systemModels.find(m => m.id === activeModelId);
         if (!model) {
@@ -3981,16 +4068,42 @@ async function getAIReply(text, images) {
         } else {
             const improvementPrompt = getActiveImprovementPrompt();
             const history = _buildConversationHistory();
-            const result = await callCustomModel(model, text, images || [], improvementPrompt, history);
-            model.status = 'ok';
-            model.lastError = '';
-            saveSystemModels();
-            return result;
+            log.addStep('request', 'Requesting ' + (model.name || 'model') + '…');
+            try {
+                const result = await callCustomModel(model, text, images || [], improvementPrompt, history);
+                model.status = 'ok';
+                model.lastError = '';
+                saveSystemModels();
+                log.completeStep('request');
+                log.addStep('final', 'Done');
+                log.completeStep('final');
+                return result;
+            } catch (e) {
+                log.completeStep('request', 'failed');
+                throw e;
+            }
         }
     }
+
     SonixModel.setPersona(settings.persona || 'default');
     if (currentUser && currentUser.name) SonixModel.setUserName(currentUser.name);
-    const reply = await SonixModel.chat(text || '');
+    // NEW: while SonixModel.chat() runs, any real DuckDuckGo/Wikipedia lookup
+    // it performs internally reports here live via find/preview steps —
+    // this is genuine research activity, not a simulated animation.
+    SonixModel.setStepReporter((type, data) => {
+        if (type === 'find') log.addStep('find', 'Searching ' + (data.source || 'the web') + (data.query ? ' for "' + data.query + '"' : '') + '…');
+        else if (type === 'preview') log.completeStep('find', data.found ? ('found: ' + (data.title || 'result')) : 'no result');
+    });
+    log.addStep('thought', 'Thinking…');
+    let reply;
+    try {
+        reply = await SonixModel.chat(text || '');
+    } finally {
+        SonixModel.setStepReporter(null);
+    }
+    log.completeStep('thought');
+    log.addStep('final', 'Done');
+    log.completeStep('final');
     return { type: 'text', text: reply };
 }
 
@@ -6555,34 +6668,43 @@ const JOKES = ["Why do programmers prefer dark mode? Because light attracts bugs
 // SECTION 6: LIVE RESEARCH SOURCES
 // ================================================================
 
+// NEW: optional hook so the UI can show what SonixModel's live research is
+// actually doing — set via SonixModel.setStepReporter(fn) from outside the
+// IIFE. Reports real fetches, not decorative/fake steps.
+let _stepReporter = null;
+
 async function searchDuckDuckGo(query) {
+  if (_stepReporter) _stepReporter('find', { source: 'DuckDuckGo', query });
   try {
     const r = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
-    if (!r.ok) return null;
+    if (!r.ok) { if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
     const d = await r.json();
     const text = d.AbstractText||d.Definition||d.Answer||"";
-    if (!text||text.length<20) return null;
+    if (!text||text.length<20) { if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
     const related = (d.RelatedTopics||[]).filter(t=>t.Text&&t.FirstURL).slice(0,3)
       .map(t=>`• [${t.Text.split(" - ")[0].substring(0,55)}](${t.FirstURL})`);
+    if (_stepReporter) _stepReporter('preview', { found: true, title: d.Heading||query, source: 'DuckDuckGo' });
     return { title:d.Heading||query, summary:text, url:d.AbstractURL||`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, source:d.AbstractSource||"DuckDuckGo", related };
-  } catch(e){return null;}
+  } catch(e){ if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
 }
 
 async function searchWikipedia(query) {
+  if (_stepReporter) _stepReporter('find', { source: 'Wikipedia', query });
   try {
     const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/\s+/g,"_"))}`);
     if (!r.ok) {
       const s = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=1`);
-      if (!s.ok) return null;
+      if (!s.ok) { if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
       const sd = await s.json();
       const hit = sd.query&&sd.query.search&&sd.query.search[0];
-      if (!hit) return null;
+      if (!hit) { if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
       return searchWikipedia(hit.title);
     }
     const d = await r.json();
-    if (!d.extract||d.extract.length<30) return null;
+    if (!d.extract||d.extract.length<30) { if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
+    if (_stepReporter) _stepReporter('preview', { found: true, title: d.title, source: 'Wikipedia' });
     return { title:d.title, summary:d.extract.split("\n")[0], url:(d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page)||`https://en.wikipedia.org/wiki/${encodeURIComponent(query)}`, source:"Wikipedia", related:[] };
-  } catch(e){return null;}
+  } catch(e){ if (_stepReporter) _stepReporter('preview', { found: false }); return null; }
 }
 
 async function lookupDictionary(word) {
@@ -7723,6 +7845,9 @@ const SonixModel = {
   getUserName()    { return _userName; },
   setPersona(p)    { _persona = (typeof p === "string" && p.trim()) ? p.trim().toLowerCase() : "default"; },
   getPersona()     { return _persona; },
+  // NEW: lets the UI show real research steps as they happen instead of a
+  // fake/decorative animation. Pass null to detach.
+  setStepReporter(fn) { _stepReporter = (typeof fn === 'function') ? fn : null; },
   clearMemory()    { _memory=[]; _topicHistory=[]; _wordHistory=[]; _turnCount=0; _sessionStart=Date.now(); },
   getMemory()      { return [..._memory]; },
 
