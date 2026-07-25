@@ -200,18 +200,23 @@ async function issueTwoFACode(env, userId, email) {
 
 // ---------- Route handlers: primary sign-in ----------
 
-// NEW: per-IP abuse protection for the two endpoints that trigger an actual
-// email send (each Resend send costs quota/money). Separate from, and in
-// addition to, the existing per-email 60s cooldown — this one exists so a
-// bot cycling through many made-up emails from one IP gets caught even
-// though each individual email only gets hit once.
+// NEW: per-IP abuse protection. Thresholds differ per action — email sends
+// cost real money/quota so those stay strict, but the model proxy carries
+// normal chat traffic (someone could easily send 50+ messages/hour), so it
+// needs a much higher ceiling or active users would get blocked constantly.
 const IP_ABUSE_WINDOW_MS = 60 * 60 * 1000;   // look back 1 hour
-const IP_ABUSE_THRESHOLD = 8;                 // more than this many in the window → block
+const IP_ABUSE_THRESHOLDS = {
+    email_request: 8,
+    '2fa_resend': 8,
+    proxy_model: 300,   // generous — this carries real chat traffic, not just abuse
+};
+const IP_ABUSE_DEFAULT_THRESHOLD = 20;
 const IP_ABUSE_BLOCK_MS = 24 * 60 * 60 * 1000; // block duration once triggered
 
 async function checkAndLogIpAbuse(env, request, action, email) {
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const now = Date.now();
+    const threshold = IP_ABUSE_THRESHOLDS[action] || IP_ABUSE_DEFAULT_THRESHOLD;
 
     const blocked = await env.DB.prepare('SELECT blocked_until FROM blocked_ips WHERE ip = ?').bind(ip).first();
     if (blocked && (blocked.blocked_until === null || blocked.blocked_until > now)) {
@@ -222,7 +227,7 @@ async function checkAndLogIpAbuse(env, request, action, email) {
         'SELECT COUNT(*) AS count FROM ip_abuse_log WHERE ip = ? AND action = ? AND created_at > ?'
     ).bind(ip, action, now - IP_ABUSE_WINDOW_MS).first();
 
-    if (count >= IP_ABUSE_THRESHOLD) {
+    if (count >= threshold) {
         await env.DB.prepare(
             'INSERT OR REPLACE INTO blocked_ips (ip, reason, blocked_at, blocked_until) VALUES (?, ?, ?, ?)'
         ).bind(ip, 'rate_limit:' + action, now, now + IP_ABUSE_BLOCK_MS).run();
@@ -696,6 +701,76 @@ async function handleMarkNotificationRead(request, env, id) {
     return json({ ok: true }, 200, env);
 }
 
+// ════════════════════════════════════════════════════════════════
+// CUSTOM MODEL PROXY
+// CORS is a browser-only restriction — a server-to-server request has no
+// such limitation. This lets the client route custom-model calls through
+// the Worker instead of hitting the third-party API directly from the
+// browser, which is what was failing for APIs (like Gemini) that don't
+// send the CORS headers browsers require for direct cross-site calls.
+// ════════════════════════════════════════════════════════════════
+
+const PROXY_MAX_BODY_BYTES = 2 * 1024 * 1024; // 2MB request cap
+
+// Best-effort SSRF guard — blocks obvious attempts to use this as a way to
+// reach internal/private infrastructure instead of a public model API.
+function isBlockedProxyHost(hostname) {
+    const h = hostname.toLowerCase();
+    if (h === 'localhost' || h.endsWith('.local')) return true;
+    if (/^127\./.test(h) || h === '0.0.0.0' || h === '::1') return true;
+    if (/^10\./.test(h)) return true;
+    if (/^192\.168\./.test(h)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(h)) return true;
+    if (/^169\.254\./.test(h)) return true; // cloud metadata endpoints live here
+    return false;
+}
+
+async function handleProxyModel(request, env) {
+    // Reuses the same abuse-tracking as the email endpoints — no request
+    // bodies or API keys are ever written to that log, just IP + timestamp.
+    const abuseCheck = await checkAndLogIpAbuse(env, request, 'proxy_model', null);
+    if (abuseCheck.blocked) return json({ error: 'Too many requests from this network. Try again later.' }, 429, env);
+
+    let payload;
+    try { payload = await request.json(); } catch (e) { return json({ error: 'Invalid request.' }, 400, env); }
+    const { url, method, headers, body } = payload;
+    if (!url) return json({ error: 'Missing target URL.' }, 400, env);
+
+    let target;
+    try { target = new URL(url); } catch (e) { return json({ error: 'Invalid target URL.' }, 400, env); }
+    if (target.protocol !== 'https:' && target.protocol !== 'http:') return json({ error: 'Only http(s) targets are allowed.' }, 400, env);
+    if (isBlockedProxyHost(target.hostname)) return json({ error: 'This target is not allowed.' }, 400, env);
+
+    const bodyStr = body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined;
+    if (bodyStr && bodyStr.length > PROXY_MAX_BODY_BYTES) return json({ error: 'Request body too large.' }, 413, env);
+
+    // Strip hop-by-hop / forbidden headers the client might have set — the
+    // Worker's own fetch sets its own Host, Content-Length, etc.
+    const outHeaders = {};
+    if (headers && typeof headers === 'object') {
+        for (const [k, v] of Object.entries(headers)) {
+            const lk = k.toLowerCase();
+            if (['host', 'content-length', 'connection'].includes(lk)) continue;
+            outHeaders[k] = v;
+        }
+    }
+
+    let res;
+    try {
+        res = await fetch(target.toString(), {
+            method: method || 'POST',
+            headers: outHeaders,
+            body: bodyStr,
+        });
+    } catch (e) {
+        return json({ error: 'Could not reach the target API: ' + e.message }, 502, env);
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
+    return json({ status: res.status, ok: res.ok, contentType, body: text }, 200, env);
+}
+
 // ---------- Router ----------
 
 export default {
@@ -726,6 +801,7 @@ export default {
             if (path === '/api/settings' && request.method === 'POST') return await handleSaveSettings(request, env);
 
             // Admin / broadcast
+            if (path === '/api/proxy-model' && request.method === 'POST') return await handleProxyModel(request, env);
             if (path === '/api/admin/login' && request.method === 'POST') return await handleAdminLogin(request, env);
             if (path === '/api/admin/upload' && request.method === 'POST') return await handleAdminUpload(request, env);
             if (path === '/api/admin/announcements' && request.method === 'POST') return await handleAdminCreateAnnouncement(request, env);
