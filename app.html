@@ -3956,13 +3956,23 @@ async function callCustomModel(model, text, images, systemPrompt, history) {
 }
 
 // Calls "Quick Free AI" — a public, no-login, no-key text endpoint (Llama 3.2)
-async function callDevToolBoxModel(text) {
+// FIX: this never received conversation history before — every message was
+// sent with zero memory of the conversation, even though this is a real
+// hosted model that benefits from it same as any custom model does. Its API
+// only takes a flat prompt string (no messages array), so prior turns get
+// folded into that string with clear turn separators instead.
+async function callDevToolBoxModel(text, history) {
+    let prompt = text || 'Hello';
+    if (history && history.length) {
+        const formatted = history.map(h => (h.role === 'assistant' ? 'Assistant' : 'User') + ': ' + h.content).join('\n\n---- new message ----\n\n');
+        prompt = formatted + '\n\n---- new message ----\n\nUser: ' + prompt;
+    }
     let res;
     try {
         res = await fetch('https://devtoolbox-api.devtoolbox-api.workers.dev/ai/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: text || 'Hello', max_tokens: 400 })
+            body: JSON.stringify({ prompt: prompt, max_tokens: 400 })
         });
     } catch (e) {
         throw new Error('Network error — this free model may be temporarily unreachable.');
@@ -4049,7 +4059,8 @@ async function getAIReply(text, images) {
     if (activeModelId === 'devtoolbox-free') {
         log.addStep('request', 'Requesting DevToolBox…');
         try {
-            const result = await callDevToolBoxModel(text);
+            const history = _buildConversationHistory();
+            const result = await callDevToolBoxModel(text, history);
             log.completeStep('request');
             log.addStep('final', 'Done');
             log.completeStep('final');
