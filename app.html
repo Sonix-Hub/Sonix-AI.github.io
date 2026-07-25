@@ -2420,9 +2420,18 @@ function importData(input) {
     reader.readAsText(file);
 }
 
-function clearAllDataConfirm() {
+async function clearAllDataConfirm() {
     if (!confirm('Clear ALL data? This cannot be undone.')) return;
-    localStorage.clear(); logout();
+    // FIX: this used to only clear localStorage and log out — for a signed-in
+    // user, their conversations were still sitting in the cloud database and
+    // would silently come right back on the next sign-in. Now actually wipes
+    // the server-side copy too (their account itself is kept, just emptied).
+    if (!isGuest && sessionToken) {
+        try { await apiFetch('/api/conversations', { method: 'DELETE' }); }
+        catch (e) { console.warn('Could not clear cloud conversations:', e.message); }
+    }
+    localStorage.clear();
+    logout();
     showToast('All data cleared');
 }
 
@@ -3144,6 +3153,11 @@ function permanentlyDelete(id) {
                 e.stopPropagation();
                 sessions = sessions.filter(s => s.id !== id);
                 saveSessions(); renderInbox('deleted'); renderSessionList(); updateInboxBadge();
+                // FIX: local removal alone did nothing server-side — saveSessions()
+                // only ever does a bulk UPSERT, it never deletes rows that dropped
+                // out of the local array. That's why a "permanently deleted"
+                // session was still sitting in D1 and came right back on reload.
+                deleteConversationFromServer(id);
                 showToast('Permanently deleted');
             };
             confirmDiv.querySelector('.inbox-del-no').onclick = (e) => {
@@ -3156,7 +3170,21 @@ function permanentlyDelete(id) {
     } else {
         sessions = sessions.filter(s => s.id !== id);
         saveSessions(); renderInbox('deleted'); renderSessionList(); updateInboxBadge();
+        deleteConversationFromServer(id);
         showToast('Permanently deleted');
+    }
+}
+
+// NEW: actually removes the row from D1 — the missing piece. Best-effort:
+// if this fails (offline, etc.) the session is still gone locally and from
+// the UI, but could reappear from cloud on next load; that's an acceptable
+// fallback rather than blocking the delete on network success.
+async function deleteConversationFromServer(id) {
+    if (isGuest) return;
+    try {
+        await apiFetch('/api/conversations/' + id, { method: 'DELETE' });
+    } catch (e) {
+        console.warn('Could not delete conversation from server:', e.message);
     }
 }
 
@@ -3184,8 +3212,16 @@ function showInlineConfirm(message, onConfirm) {
 function purgeExpiredDeleted() {
     const cutoff = 24 * 3600 * 1000;
     const before = sessions.length;
+    const expiring = sessions.filter(s => s._deleted && (Date.now() - s._deletedAt) >= cutoff);
     sessions = sessions.filter(s => !s._deleted || (Date.now() - s._deletedAt) < cutoff);
-    if (sessions.length !== before) { saveSessions(); renderSessionList(); }
+    if (sessions.length !== before) {
+        saveSessions();
+        renderSessionList();
+        // FIX: same server-delete gap as permanentlyDelete() — without this,
+        // auto-purged sessions were also coming back after the cloud sync
+        // re-pulled them down on the next load.
+        expiring.forEach(s => deleteConversationFromServer(s.id));
+    }
 }
 
 function updateInboxBadge() {

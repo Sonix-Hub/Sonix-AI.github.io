@@ -407,6 +407,16 @@ async function handleGetConversations(request, env) {
     return json({ sessions }, 200, env);
 }
 
+// NEW: wipes every stored conversation for the signed-in user WITHOUT
+// deleting their account — this is what "Clear All Data" should actually
+// call server-side; deleting the account entirely is a separate, bigger action.
+async function handleClearMyConversations(request, env) {
+    const user = await getUserFromRequest(request, env);
+    if (!user) return json({ error: 'Not signed in.' }, 401, env);
+    await env.DB.prepare('DELETE FROM conversations WHERE user_id = ?').bind(user.id).run();
+    return json({ ok: true }, 200, env);
+}
+
 async function handleSaveConversation(request, env) {
     const user = await getUserFromRequest(request, env);
     if (!user) return json({ error: 'Not signed in.' }, 401, env);
@@ -666,6 +676,7 @@ export default {
             if (path === '/api/account' && request.method === 'DELETE') return await handleDeleteAccount(request, env);
             if (path === '/api/conversations' && request.method === 'GET') return await handleGetConversations(request, env);
             if (path === '/api/conversations' && request.method === 'POST') return await handleSaveConversation(request, env);
+            if (path === '/api/conversations' && request.method === 'DELETE') return await handleClearMyConversations(request, env);
             if (path === '/api/conversations/bulk' && request.method === 'POST') return await handleBulkSaveConversations(request, env);
             if (path.startsWith('/api/conversations/') && request.method === 'DELETE') {
                 return await handleDeleteConversation(request, env, path.split('/').pop());
