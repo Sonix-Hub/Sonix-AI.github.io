@@ -200,6 +200,40 @@ async function issueTwoFACode(env, userId, email) {
 
 // ---------- Route handlers: primary sign-in ----------
 
+// NEW: per-IP abuse protection for the two endpoints that trigger an actual
+// email send (each Resend send costs quota/money). Separate from, and in
+// addition to, the existing per-email 60s cooldown — this one exists so a
+// bot cycling through many made-up emails from one IP gets caught even
+// though each individual email only gets hit once.
+const IP_ABUSE_WINDOW_MS = 60 * 60 * 1000;   // look back 1 hour
+const IP_ABUSE_THRESHOLD = 8;                 // more than this many in the window → block
+const IP_ABUSE_BLOCK_MS = 24 * 60 * 60 * 1000; // block duration once triggered
+
+async function checkAndLogIpAbuse(env, request, action, email) {
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const now = Date.now();
+
+    const blocked = await env.DB.prepare('SELECT blocked_until FROM blocked_ips WHERE ip = ?').bind(ip).first();
+    if (blocked && (blocked.blocked_until === null || blocked.blocked_until > now)) {
+        return { blocked: true };
+    }
+
+    const { count } = await env.DB.prepare(
+        'SELECT COUNT(*) AS count FROM ip_abuse_log WHERE ip = ? AND action = ? AND created_at > ?'
+    ).bind(ip, action, now - IP_ABUSE_WINDOW_MS).first();
+
+    if (count >= IP_ABUSE_THRESHOLD) {
+        await env.DB.prepare(
+            'INSERT OR REPLACE INTO blocked_ips (ip, reason, blocked_at, blocked_until) VALUES (?, ?, ?, ?)'
+        ).bind(ip, 'rate_limit:' + action, now, now + IP_ABUSE_BLOCK_MS).run();
+        return { blocked: true };
+    }
+
+    await env.DB.prepare('INSERT INTO ip_abuse_log (ip, email, action, created_at) VALUES (?, ?, ?, ?)')
+        .bind(ip, email || null, action, now).run();
+    return { blocked: false };
+}
+
 async function handleEmailRequest(request, env) {
     const { email, nickname } = await request.json();
     if (!email) return json({ error: 'Email is required.' }, 400, env);
@@ -208,6 +242,10 @@ async function handleEmailRequest(request, env) {
     // NEW: permanently banned emails can't even request a code.
     const banned = await env.DB.prepare('SELECT email FROM banned_emails WHERE email = ?').bind(email).first();
     if (banned) return json({ error: 'This account is no longer available.' }, 403, env);
+
+    // NEW: per-IP abuse check, separate from the per-email cooldown below.
+    const abuseCheck = await checkAndLogIpAbuse(env, request, 'email_request', email);
+    if (abuseCheck.blocked) return json({ error: 'Too many requests from this network. Try again later.' }, 429, env);
 
     const now = Date.now();
     const existing = await env.DB.prepare(
@@ -342,6 +380,9 @@ async function handle2FAResend(request, env) {
 
     const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(pending.user_id).first();
     if (!user) return json({ error: 'Account not found.' }, 400, env);
+
+    const abuseCheck = await checkAndLogIpAbuse(env, request, '2fa_resend', user.email);
+    if (abuseCheck.blocked) return json({ error: 'Too many requests from this network. Try again later.' }, 429, env);
 
     const result = await issueTwoFACode(env, user.id, user.email);
     if (result.error) return json({ error: result.error }, 429, env);

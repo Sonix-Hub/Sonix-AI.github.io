@@ -88,6 +88,13 @@
 
         /* MODALS */
         .modal-base { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); width: 90%; max-width: 420px; background: rgba(13,13,13,0.98); border: 1px solid var(--accent); padding: 28px; border-radius: 25px; z-index: 4000; display: none; opacity: 0; transition: 0.3s; max-height: 88dvh; overflow-y: auto; }
+        /* FIX: #auth-screen sits at z-index 9000 and is still visible while this
+           modal is open (code entry happens BEFORE login completes) — without
+           this override the modal rendered invisibly behind the opaque auth
+           screen, which is why it looked like sign-in "didn't work" or "got
+           blocked." #modal-backdrop.above-auth gets the matching bump below. */
+        #signin-code-modal { z-index: 9200; }
+        #modal-backdrop.above-auth { z-index: 9150; }
         .modal-base.active { display: block; opacity: 1; transform: translate(-50%,-50%) scale(1); }
         .modal-title { color: var(--accent); margin: 0 0 18px; font-size: 1rem; letter-spacing: 2px; }
         .modal-close-btn { background: var(--accent); border: none; padding: 10px 24px; border-radius: 20px; font-weight: 700; cursor: pointer; margin-top: 14px; }
@@ -2234,6 +2241,7 @@ function openModal(id) {
     if (document.getElementById('app-body').classList.contains('menu-open')) toggleMenu();
 
     document.getElementById('modal-backdrop').classList.add('active');
+    document.getElementById('modal-backdrop').classList.toggle('above-auth', id === 'signin-code-modal');
     m.style.display = 'block';
     requestAnimationFrame(() => requestAnimationFrame(() => m.classList.add('active')));
 }
@@ -2244,13 +2252,20 @@ function closeModal(id) {
     m.classList.remove('active');
     setTimeout(() => { m.style.display = 'none'; }, 300);
     document.getElementById('modal-backdrop').classList.remove('active');
+    document.getElementById('modal-backdrop').classList.remove('above-auth');
     activeModalId = null;
     if (id === 'inbox-modal' && typeof _inboxTimerInterval !== 'undefined' && _inboxTimerInterval) {
         clearInterval(_inboxTimerInterval); _inboxTimerInterval = null;
     }
 }
 
-function backdropClose() { if (activeModalId) closeModal(activeModalId); }
+function backdropClose() {
+    // FIX: tapping outside used to cancel ANY open modal, including
+    // mid-signup — losing your place just from a stray tap. The sign-in
+    // code modal has a real Cancel button now, so that's the only way out.
+    if (activeModalId === 'signin-code-modal') return;
+    if (activeModalId) closeModal(activeModalId);
+}
 
 // Navigate from one modal to another without any timing bugs
 function switchModal(fromId, toId) {
