@@ -209,6 +209,7 @@ const IP_ABUSE_THRESHOLDS = {
     email_request: 8,
     '2fa_resend': 8,
     proxy_model: 300,   // generous — this carries real chat traffic, not just abuse
+    fetch_url: 100,     // real Documents/Files tool usage, not just abuse
 };
 const IP_ABUSE_DEFAULT_THRESHOLD = 20;
 const IP_ABUSE_BLOCK_MS = 24 * 60 * 60 * 1000; // block duration once triggered
@@ -771,6 +772,68 @@ async function handleProxyModel(request, env) {
     return json({ status: res.status, ok: res.ok, contentType, body: text }, 200, env);
 }
 
+// ════════════════════════════════════════════════════════════════
+// DOCUMENTS / FILES TOOL
+// Actually fetches a URL's real content server-side (bypassing CORS, same
+// as the model proxy above) and returns cleaned, readable text — this is
+// what backs the "Documents"/"Files" process-log steps for real, instead
+// of just showing an icon with nothing behind it.
+// ════════════════════════════════════════════════════════════════
+
+const FETCH_URL_MAX_CHARS = 6000; // keep it small enough to be a reasonable chunk of model context
+
+function stripHtmlToText(html) {
+    return html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<!--[\s\S]*?-->/g, ' ')
+        .replace(/<\/(p|div|br|li|h[1-6]|tr)>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'")
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n\s*\n\s*\n+/g, '\n\n')
+        .trim();
+}
+
+async function handleFetchUrl(request, env) {
+    const abuseCheck = await checkAndLogIpAbuse(env, request, 'fetch_url', null);
+    if (abuseCheck.blocked) return json({ error: 'Too many requests from this network. Try again later.' }, 429, env);
+
+    let payload;
+    try { payload = await request.json(); } catch (e) { return json({ error: 'Invalid request.' }, 400, env); }
+    const rawUrl = payload && payload.url;
+    if (!rawUrl) return json({ error: 'Missing URL.' }, 400, env);
+
+    let target;
+    try { target = new URL(rawUrl); } catch (e) { return json({ error: 'Invalid URL.' }, 400, env); }
+    if (target.protocol !== 'https:' && target.protocol !== 'http:') return json({ error: 'Only http(s) URLs are allowed.' }, 400, env);
+    if (isBlockedProxyHost(target.hostname)) return json({ error: 'This URL is not allowed.' }, 400, env);
+
+    let res;
+    try {
+        res = await fetch(target.toString(), { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SonixBot/1.0)' } });
+    } catch (e) {
+        return json({ error: 'Could not reach that URL: ' + e.message }, 502, env);
+    }
+    if (!res.ok) return json({ error: 'That page returned HTTP ' + res.status }, 502, env);
+
+    const contentType = res.headers.get('content-type') || '';
+    const raw = await res.text();
+    let text;
+    if (contentType.includes('html')) {
+        text = stripHtmlToText(raw);
+    } else {
+        text = raw; // plain text, JSON, markdown, etc. — used as-is
+    }
+    const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : target.hostname;
+
+    if (text.length > FETCH_URL_MAX_CHARS) text = text.slice(0, FETCH_URL_MAX_CHARS) + '\n\n[Content truncated…]';
+    if (!text.trim()) return json({ error: 'No readable text content found at that URL.' }, 200, env);
+
+    return json({ title, url: target.toString(), text, length: text.length }, 200, env);
+}
+
 // ---------- Router ----------
 
 export default {
@@ -802,6 +865,7 @@ export default {
 
             // Admin / broadcast
             if (path === '/api/proxy-model' && request.method === 'POST') return await handleProxyModel(request, env);
+            if (path === '/api/tools/fetch-url' && request.method === 'POST') return await handleFetchUrl(request, env);
             if (path === '/api/admin/login' && request.method === 'POST') return await handleAdminLogin(request, env);
             if (path === '/api/admin/upload' && request.method === 'POST') return await handleAdminUpload(request, env);
             if (path === '/api/admin/announcements' && request.method === 'POST') return await handleAdminCreateAnnouncement(request, env);
