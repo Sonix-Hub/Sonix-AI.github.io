@@ -94,6 +94,7 @@
         <button class="tab-btn active" id="tab-compose-btn" onclick="switchTab('compose')">Broadcast</button>
         <button class="tab-btn" id="tab-list-btn" onclick="switchTab('list')">Sent</button>
         <button class="tab-btn" id="tab-users-btn" onclick="switchTab('users')">Users</button>
+        <button class="tab-btn" id="tab-knowledge-btn" onclick="switchTab('knowledge')">Knowledge</button>
     </div>
 
     <div class="panel active" id="panel-compose">
@@ -161,6 +162,18 @@
             <div id="mgmt-results" style="margin-top:10px;"></div>
         </div>
     </div>
+
+    <div class="panel" id="panel-knowledge">
+        <div class="card">
+            <div class="msg" style="color:#666;margin-bottom:10px;">Q&amp;A pairs submitted from real model replies via "Teach SONIX" in the app. Nothing here reaches SonixModel's answers until approved.</div>
+            <div class="tabs" style="margin-bottom:12px;">
+                <button class="tab-btn active" id="k-tab-pending-btn" onclick="loadKnowledge('pending')">Pending</button>
+                <button class="tab-btn" id="k-tab-approved-btn" onclick="loadKnowledge('approved')">Approved</button>
+                <button class="tab-btn" id="k-tab-rejected-btn" onclick="loadKnowledge('rejected')">Rejected</button>
+            </div>
+            <div id="knowledge-list"></div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -218,11 +231,56 @@ function showDashboard() {
 if (adminToken) showDashboard();
 
 function switchTab(tab) {
-    ['compose','list','users'].forEach(function(t) {
+    ['compose','list','users','knowledge'].forEach(function(t) {
         document.getElementById('tab-' + t + '-btn').classList.toggle('active', t === tab);
         document.getElementById('panel-' + t).classList.toggle('active', t === tab);
     });
     if (tab === 'list') loadAnnouncements();
+    if (tab === 'knowledge') loadKnowledge('pending');
+}
+
+async function loadKnowledge(status) {
+    ['pending','approved','rejected'].forEach(function(s) {
+        document.getElementById('k-tab-' + s + '-btn').classList.toggle('active', s === status);
+    });
+    const box = document.getElementById('knowledge-list');
+    box.innerHTML = '<div style="color:#555;font-size:0.78rem;">Loading…</div>';
+    try {
+        const data = await adminFetch('/api/admin/knowledge?status=' + status);
+        box.innerHTML = data.entries.map(function(e) {
+            var actions = '';
+            if (status === 'pending') {
+                actions = '<div class="user-row-actions">' +
+                    '<button class="mini-btn" onclick="reviewKnowledge(\'' + e.id + '\',\'approve\')">Approve</button>' +
+                    '<button class="mini-btn ban" onclick="reviewKnowledge(\'' + e.id + '\',\'reject\')">Reject</button>' +
+                    '</div>';
+            } else {
+                actions = '<div class="user-row-actions"><button class="mini-btn ban" onclick="deleteKnowledge(\'' + e.id + '\')">Delete</button></div>';
+            }
+            return '<div class="ann-item">' +
+                '<div style="font-weight:700;font-size:0.82rem;">' + _esc(e.question) + '</div>' +
+                '<div class="ann-body">' + _esc(e.answer.slice(0, 300)) + (e.answer.length > 300 ? '…' : '') + '</div>' +
+                '<div class="ann-meta">From: ' + _esc(e.source_model || 'unknown') + ' &middot; used ' + e.use_count + ' time(s) &middot; ' + new Date(e.created_at).toLocaleString() + '</div>' +
+                actions + '</div>';
+        }).join('') || '<div style="color:#555;font-size:0.78rem;">Nothing here.</div>';
+    } catch (e) {
+        box.innerHTML = '<div class="msg err">' + _esc(e.message || 'Could not load.') + '</div>';
+    }
+}
+
+async function reviewKnowledge(id, decision) {
+    try {
+        await adminFetch('/api/admin/knowledge/' + id + '/' + decision, { method: 'POST' });
+        loadKnowledge('pending');
+    } catch (e) { alert(e.message || 'Failed.'); }
+}
+
+async function deleteKnowledge(id) {
+    if (!confirm('Delete this entry permanently?')) return;
+    try {
+        await adminFetch('/api/admin/knowledge/' + id, { method: 'DELETE' });
+        loadKnowledge(document.getElementById('k-tab-approved-btn').classList.contains('active') ? 'approved' : 'rejected');
+    } catch (e) { alert(e.message || 'Failed.'); }
 }
 
 function setKind(kind) {

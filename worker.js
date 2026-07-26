@@ -210,6 +210,7 @@ const IP_ABUSE_THRESHOLDS = {
     '2fa_resend': 8,
     proxy_model: 300,   // generous — this carries real chat traffic, not just abuse
     fetch_url: 100,     // real Documents/Files tool usage, not just abuse
+    knowledge_learn: 30, // legitimate use should be occasional, not constant
 };
 const IP_ABUSE_DEFAULT_THRESHOLD = 20;
 const IP_ABUSE_BLOCK_MS = 24 * 60 * 60 * 1000; // block duration once triggered
@@ -834,6 +835,94 @@ async function handleFetchUrl(request, env) {
     return json({ title, url: target.toString(), text, length: text.length }, 200, env);
 }
 
+// ════════════════════════════════════════════════════════════════
+// SONIXMODEL LEARNING SYSTEM
+// SonixModel (SONIX-Core) is a rule-based pattern engine, not a neural
+// network — there are no weights here to train. "Learning" instead means:
+// when a real connected AI model gives a good answer to something
+// SonixModel didn't know, that Q&A pair can be submitted here. It sits as
+// 'pending' until approved in admin.html, then SonixModel's search step
+// checks this table before falling back to its generic response. This
+// makes real, growing, human-curated improvement — not a fabricated
+// "self-training" claim.
+// ════════════════════════════════════════════════════════════════
+
+async function handleKnowledgeLearn(request, env) {
+    const abuseCheck = await checkAndLogIpAbuse(env, request, 'knowledge_learn', null);
+    if (abuseCheck.blocked) return json({ error: 'Too many submissions from this network. Try again later.' }, 429, env);
+
+    const b = await request.json();
+    const question = (b.question || '').trim();
+    const answer = (b.answer || '').trim();
+    if (!question || !answer) return json({ error: 'Missing question or answer.' }, 400, env);
+    if (question.length > 2000 || answer.length > 8000) return json({ error: 'Too long.' }, 400, env);
+
+    const id = uuid();
+    await env.DB.prepare(
+        'INSERT INTO learned_knowledge (id, question, answer, source_model, status, use_count, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)'
+    ).bind(id, question, answer, b.sourceModel || null, 'pending', Date.now()).run();
+
+    return json({ id, status: 'pending' }, 200, env);
+}
+
+// Simple word-overlap matching — no vector search needed at this scale.
+// Public and read-only, only ever returns 'approved' entries.
+function scoreMatch(query, candidate) {
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+    const qWords = new Set(norm(query));
+    const cWords = new Set(norm(candidate));
+    if (qWords.size === 0) return 0;
+    let overlap = 0;
+    for (const w of qWords) if (cWords.has(w)) overlap++;
+    return overlap / qWords.size;
+}
+
+async function handleKnowledgeSearch(request, env) {
+    const url = new URL(request.url);
+    const q = (url.searchParams.get('q') || '').trim();
+    if (!q) return json({ match: null }, 200, env);
+
+    const { results } = await env.DB.prepare(
+        "SELECT id, question, answer, source_model FROM learned_knowledge WHERE status = 'approved' ORDER BY use_count DESC LIMIT 500"
+    ).all();
+
+    let best = null, bestScore = 0;
+    for (const row of results) {
+        const score = scoreMatch(q, row.question);
+        if (score > bestScore) { bestScore = score; best = row; }
+    }
+
+    if (best && bestScore >= 0.6) {
+        env.DB.prepare('UPDATE learned_knowledge SET use_count = use_count + 1 WHERE id = ?').bind(best.id).run().catch(() => {});
+        return json({ match: { answer: best.answer, sourceModel: best.source_model } }, 200, env);
+    }
+    return json({ match: null }, 200, env);
+}
+
+async function handleAdminListKnowledge(request, env) {
+    if (!(await getAdminFromRequest(request, env))) return json({ error: 'Not authorized.' }, 401, env);
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status') || 'pending';
+    const { results } = await env.DB.prepare(
+        'SELECT * FROM learned_knowledge WHERE status = ? ORDER BY created_at DESC LIMIT 200'
+    ).bind(status).all();
+    return json({ entries: results }, 200, env);
+}
+
+async function handleAdminReviewKnowledge(request, env, id, decision) {
+    if (!(await getAdminFromRequest(request, env))) return json({ error: 'Not authorized.' }, 401, env);
+    if (!['approved', 'rejected'].includes(decision)) return json({ error: 'Invalid decision.' }, 400, env);
+    await env.DB.prepare('UPDATE learned_knowledge SET status = ?, reviewed_at = ? WHERE id = ?')
+        .bind(decision, Date.now(), id).run();
+    return json({ ok: true }, 200, env);
+}
+
+async function handleAdminDeleteKnowledge(request, env, id) {
+    if (!(await getAdminFromRequest(request, env))) return json({ error: 'Not authorized.' }, 401, env);
+    await env.DB.prepare('DELETE FROM learned_knowledge WHERE id = ?').bind(id).run();
+    return json({ ok: true }, 200, env);
+}
+
 // ---------- Router ----------
 
 export default {
@@ -866,6 +955,18 @@ export default {
             // Admin / broadcast
             if (path === '/api/proxy-model' && request.method === 'POST') return await handleProxyModel(request, env);
             if (path === '/api/tools/fetch-url' && request.method === 'POST') return await handleFetchUrl(request, env);
+            if (path === '/api/knowledge/learn' && request.method === 'POST') return await handleKnowledgeLearn(request, env);
+            if (path === '/api/knowledge/search' && request.method === 'GET') return await handleKnowledgeSearch(request, env);
+            if (path === '/api/admin/knowledge' && request.method === 'GET') return await handleAdminListKnowledge(request, env);
+            if (path.match(/^\/api\/admin\/knowledge\/[^/]+\/approve$/) && request.method === 'POST') {
+                return await handleAdminReviewKnowledge(request, env, path.split('/')[4], 'approved');
+            }
+            if (path.match(/^\/api\/admin\/knowledge\/[^/]+\/reject$/) && request.method === 'POST') {
+                return await handleAdminReviewKnowledge(request, env, path.split('/')[4], 'rejected');
+            }
+            if (path.startsWith('/api/admin/knowledge/') && request.method === 'DELETE') {
+                return await handleAdminDeleteKnowledge(request, env, path.split('/').pop());
+            }
             if (path === '/api/admin/login' && request.method === 'POST') return await handleAdminLogin(request, env);
             if (path === '/api/admin/upload' && request.method === 'POST') return await handleAdminUpload(request, env);
             if (path === '/api/admin/announcements' && request.method === 'POST') return await handleAdminCreateAnnouncement(request, env);
