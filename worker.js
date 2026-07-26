@@ -923,6 +923,148 @@ async function handleAdminDeleteKnowledge(request, env, id) {
     return json({ ok: true }, 200, env);
 }
 
+// NEW: exports every 'approved' entry in the exact shape sonix-model.json
+// expects — this is what makes the repo file the real source of truth,
+// with Cloudflare only ever holding things briefly in transit.
+async function handleAdminExportKnowledge(request, env) {
+    if (!(await getAdminFromRequest(request, env))) return json({ error: 'Not authorized.' }, 401, env);
+    const { results } = await env.DB.prepare(
+        "SELECT question, answer, source_model, created_at FROM learned_knowledge WHERE status = 'approved' ORDER BY created_at ASC"
+    ).all();
+    const entries = results.map(r => ({ question: r.question, answer: r.answer, sourceModel: r.source_model || null, learnedAt: r.created_at }));
+    return json({ entries, exportedAt: Date.now() }, 200, env);
+}
+
+// NEW: once you've downloaded sonix-model.json, this clears the approved
+// rows out of D1 so nothing sits on Cloudflare long-term — the repo file
+// becomes the only copy. Pending/rejected entries are untouched.
+async function handleAdminPurgeApprovedKnowledge(request, env) {
+    if (!(await getAdminFromRequest(request, env))) return json({ error: 'Not authorized.' }, 401, env);
+    const { meta } = await env.DB.prepare("DELETE FROM learned_knowledge WHERE status = 'approved'").run();
+    return json({ ok: true, deleted: meta ? meta.changes : undefined }, 200, env);
+}
+
+// ════════════════════════════════════════════════════════════════
+// AUTO-LEARN — SonixModel learning from another AI model on a schedule,
+// independent of any browser session being open. DevToolBox (free, no key)
+// is the default teacher; if TEACHER_MODEL_ENDPOINT + TEACHER_MODEL_KEY are
+// set as Worker secrets, that's used instead. One new topic per run —
+// auto-approved (trusted, curated source) but tagged 'auto_learned' so it's
+// always distinguishable from public "Teach SONIX" submissions in the
+// Knowledge tab, and easy to bulk-review or delete later.
+// ════════════════════════════════════════════════════════════════
+
+const CURRICULUM = [
+    // coding — simple to hard
+    { key: 'code-1', q: 'What is a variable in programming? Explain simply.' },
+    { key: 'code-2', q: 'What is the difference between a for loop and a while loop?' },
+    { key: 'code-3', q: 'Explain what a function/method is and why they are useful.' },
+    { key: 'code-4', q: 'What is recursion, and give a simple example.' },
+    { key: 'code-5', q: 'What is the difference between an array and an object/dictionary?' },
+    { key: 'code-6', q: 'Explain what Big O notation means and why it matters.' },
+    { key: 'code-7', q: 'What is a race condition in concurrent programming?' },
+    { key: 'code-8', q: 'Explain the difference between synchronous and asynchronous code.' },
+    { key: 'code-9', q: 'What is a memory leak and how do you typically prevent one?' },
+    { key: 'code-10', q: 'Explain what a binary search tree is and why it is efficient.' },
+    // math — simple to hard
+    { key: 'math-1', q: 'Explain what a prime number is with an example.' },
+    { key: 'math-2', q: 'What is the Pythagorean theorem and what is it used for?' },
+    { key: 'math-3', q: 'Explain the difference between mean, median, and mode.' },
+    { key: 'math-4', q: 'What is a derivative in calculus, explained simply?' },
+    { key: 'math-5', q: 'Explain what standard deviation measures.' },
+    { key: 'math-6', q: 'What is Bayes\' theorem and when would you use it?' },
+    { key: 'math-7', q: 'Explain what eigenvalues and eigenvectors represent.' },
+    // communication
+    { key: 'comm-1', q: 'What makes an email sound polite but still direct?' },
+    { key: 'comm-2', q: 'How do you politely decline a meeting invite?' },
+    { key: 'comm-3', q: 'What is active listening and why does it matter in conversations?' },
+    { key: 'comm-4', q: 'How do you give constructive feedback without discouraging someone?' },
+    { key: 'comm-5', q: 'What is the difference between assertive and aggressive communication?' },
+    // science
+    { key: 'sci-1', q: 'Explain photosynthesis simply.' },
+    { key: 'sci-2', q: 'What is the difference between weather and climate?' },
+    { key: 'sci-3', q: 'Explain Newton\'s three laws of motion simply.' },
+    { key: 'sci-4', q: 'What is DNA and what does it do?' },
+    { key: 'sci-5', q: 'Explain what a black hole is and how it forms.' },
+    { key: 'sci-6', q: 'What is the theory of relativity, explained simply?' },
+    // problem solving / reasoning
+    { key: 'reason-1', q: 'What is the difference between deductive and inductive reasoning?' },
+    { key: 'reason-2', q: 'Explain the sunk cost fallacy with an everyday example.' },
+    { key: 'reason-3', q: 'What is Occam\'s razor and how is it applied?' },
+    { key: 'reason-4', q: 'How would you break down a complex problem into smaller steps?' },
+    { key: 'reason-5', q: 'What is a logical fallacy, and give one common example.' },
+    { key: 'reason-6', q: 'Explain the difference between correlation and causation.' },
+];
+
+async function callTeacherModel(env, question) {
+    // Prefer a configured stronger teacher, if one is set up as a secret.
+    if (env.TEACHER_MODEL_ENDPOINT) {
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            const authType = env.TEACHER_MODEL_AUTH_TYPE || 'bearer';
+            if (env.TEACHER_MODEL_KEY) {
+                if (authType === 'xapikey') headers['x-api-key'] = env.TEACHER_MODEL_KEY;
+                else if (authType === 'header' && env.TEACHER_MODEL_AUTH_HEADER) headers[env.TEACHER_MODEL_AUTH_HEADER] = env.TEACHER_MODEL_KEY;
+                else headers['Authorization'] = 'Bearer ' + env.TEACHER_MODEL_KEY;
+            }
+            const res = await fetch(env.TEACHER_MODEL_ENDPOINT, {
+                method: 'POST', headers,
+                body: JSON.stringify({ model: env.TEACHER_MODEL_ID || 'default', messages: [{ role: 'user', content: question }], max_tokens: 600 }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                if (reply && reply.trim()) return { answer: reply.trim(), sourceModel: env.TEACHER_MODEL_NAME || 'Configured teacher model' };
+            }
+        } catch (e) { /* fall through to DevToolBox */ }
+    }
+
+    // Default teacher — free, no key, always available.
+    try {
+        const res = await fetch('https://devtoolbox-api.devtoolbox-api.workers.dev/ai/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: question, max_tokens: 500 }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const reply = (typeof data.result === 'string' && data.result) || (data.result && data.result.response) || data.response || data.output || data.generated_text || data.text;
+            if (reply && reply.trim()) return { answer: reply.trim(), sourceModel: 'DevToolBox' };
+        }
+    } catch (e) { /* no teacher available this run */ }
+
+    return null;
+}
+
+async function runAutoLearnCycle(env) {
+    const { results: doneRows } = await env.DB.prepare('SELECT topic_key FROM curriculum_progress').all();
+    const done = new Set(doneRows.map(r => r.topic_key));
+    const next = CURRICULUM.find(t => !done.has(t.key));
+    if (!next) return { done: true, message: 'Curriculum complete — nothing new to learn right now.' };
+
+    const result = await callTeacherModel(env, next.q);
+    if (!result || !result.answer || result.answer.length < 20) {
+        // Sanity check failed (empty/broken/too-short answer) — don't mark as
+        // done, so it's retried on the next scheduled run instead of skipped.
+        return { done: false, skipped: true, topic: next.key };
+    }
+
+    const id = uuid();
+    const now = Date.now();
+    await env.DB.prepare(
+        'INSERT INTO learned_knowledge (id, question, answer, source_model, status, origin, use_count, created_at, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)'
+    ).bind(id, next.q, result.answer, result.sourceModel, 'approved', 'auto_learned', now, now).run();
+    await env.DB.prepare('INSERT INTO curriculum_progress (topic_key, learned_at) VALUES (?, ?)').bind(next.key, now).run();
+
+    return { done: false, learned: next.key, sourceModel: result.sourceModel };
+}
+
+// Admin-triggerable manual run — for testing without waiting on the schedule.
+async function handleAdminRunAutoLearn(request, env) {
+    if (!(await getAdminFromRequest(request, env))) return json({ error: 'Not authorized.' }, 401, env);
+    const result = await runAutoLearnCycle(env);
+    return json(result, 200, env);
+}
+
 // ---------- Router ----------
 
 export default {
@@ -958,6 +1100,9 @@ export default {
             if (path === '/api/knowledge/learn' && request.method === 'POST') return await handleKnowledgeLearn(request, env);
             if (path === '/api/knowledge/search' && request.method === 'GET') return await handleKnowledgeSearch(request, env);
             if (path === '/api/admin/knowledge' && request.method === 'GET') return await handleAdminListKnowledge(request, env);
+            if (path === '/api/admin/knowledge/export' && request.method === 'GET') return await handleAdminExportKnowledge(request, env);
+            if (path === '/api/admin/knowledge/purge-approved' && request.method === 'POST') return await handleAdminPurgeApprovedKnowledge(request, env);
+            if (path === '/api/admin/knowledge/auto-learn-now' && request.method === 'POST') return await handleAdminRunAutoLearn(request, env);
             if (path.match(/^\/api\/admin\/knowledge\/[^/]+\/approve$/) && request.method === 'POST') {
                 return await handleAdminReviewKnowledge(request, env, path.split('/')[4], 'approved');
             }
@@ -993,5 +1138,12 @@ export default {
         } catch (e) {
             return json({ error: 'Server error: ' + e.message }, 500, env);
         }
+    },
+
+    // NEW: fires on the schedule set in wrangler.jsonc's "triggers.crons" —
+    // runs independent of any browser session, which is the whole point:
+    // SonixModel keeps learning even while nobody has the app open.
+    async scheduled(event, env, ctx) {
+        ctx.waitUntil(runAutoLearnCycle(env).catch(e => console.error('Auto-learn cycle failed:', e.message)));
     },
 };
